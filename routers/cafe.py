@@ -1,24 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from math import ceil
 from database import get_db
 from models import Cafe, Admin
-from schemas import CafeCreate, CafeUpdate, CafeResponse
+from schemas import CafeCreate, CafeUpdate, CafeResponse, PaginatedResponse, PaginationMeta
 from auth_utils import get_current_admin
 
 router = APIRouter()
 
 # Public endpoint - List all cafes
-@router.get("/", response_model=List[CafeResponse])
+@router.get("/", response_model=PaginatedResponse[CafeResponse])
 def get_all_cafes(
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
     nama: Optional[str] = Query(None, description="Filter by cafe name"),
     min_rating: Optional[float] = Query(None, ge=0, le=5, description="Minimum rating"),
     db: Session = Depends(get_db)
 ):
     """
-    Get list of all cafes with optional filtering
+    Get list of all cafes with pagination and optional filtering
     Public endpoint - no authentication required
     """
     query = db.query(Cafe)
@@ -29,11 +30,28 @@ def get_all_cafes(
     if min_rating is not None:
         query = query.filter(Cafe.rating >= min_rating)
     
+    # Get total count before pagination
+    total = query.count()
+    
     # Order by rating descending, then by name
     query = query.order_by(Cafe.rating.desc(), Cafe.nama)
     
-    cafes = query.offset(skip).limit(limit).all()
-    return cafes
+    # Calculate offset and apply pagination
+    offset = (page - 1) * page_size
+    cafes = query.offset(offset).limit(page_size).all()
+    
+    # Calculate total pages
+    total_pages = ceil(total / page_size) if total > 0 else 0
+    
+    return {
+        "data": cafes,
+        "meta": {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+    }
 
 # Public endpoint - Get single cafe by ID
 @router.get("/{cafe_id}", response_model=CafeResponse)

@@ -1,6 +1,20 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Generic, TypeVar
 from datetime import datetime
+from math import ceil
+
+# Generic Pagination Schema
+T = TypeVar('T')
+
+class PaginationMeta(BaseModel):
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Number of items per page")
+    total_pages: int = Field(..., description="Total number of pages")
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    data: List[T] = Field(..., description="List of items")
+    meta: PaginationMeta = Field(..., description="Pagination metadata")
 
 # Cafe Schemas
 class CafeBase(BaseModel):

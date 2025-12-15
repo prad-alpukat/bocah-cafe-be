@@ -88,10 +88,36 @@ Headers: Authorization: Bearer <token>
 ```
 GET /api/cafe/
 Query params:
-  - skip: int (default: 0)
-  - limit: int (default: 100, max: 100)
+  - page: int (default: 1, min: 1) - Page number
+  - page_size: int (default: 10, min: 1, max: 100) - Items per page
   - nama: string (optional - filter by name)
   - min_rating: float (optional - minimum rating filter)
+
+Response:
+{
+  "data": [
+    {
+      "id": 1,
+      "nama": "Cafe Example",
+      "gambar_thumbnail": "https://example.com/image.jpg",
+      "no_hp": "081234567890",
+      "link_website": "https://example.com",
+      "rating": 4.5,
+      "range_price": "Rp 15.000 - Rp 50.000",
+      "count_google_review": 150,
+      "jam_buka": "08:00 - 22:00",
+      "alamat_lengkap": "Jl. Example No. 123, Jakarta",
+      "created_at": "2025-12-16T10:00:00",
+      "updated_at": null
+    }
+  ],
+  "meta": {
+    "total": 50,
+    "page": 1,
+    "page_size": 10,
+    "total_pages": 5
+  }
+}
 ```
 
 #### Get Single Cafe
