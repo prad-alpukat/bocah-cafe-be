@@ -25,13 +25,28 @@ Setiap cafe memiliki informasi:
 
 ## Instalasi
 
-1. Install dependencies:
+1. Copy file environment example:
+
+```bash
+cp .env.example .env
+```
+
+2. Edit file `.env` dan sesuaikan konfigurasi:
+
+```env
+SECRET_KEY=your-super-secret-key-change-this-in-production-min-32-characters
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+ALLOW_ADMIN_REGISTRATION=true  # Set to false to disable admin registration
+```
+
+3. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Jalankan aplikasi:
+4. Jalankan aplikasi:
 
 ```bash
 python main.py
@@ -210,6 +225,18 @@ Headers: Authorization: Bearer <token>
 - JWT token untuk authentication
 - Token expires dalam 24 jam
 - Admin-only endpoints dilindungi dengan Bearer token
+- Admin registration dapat dinonaktifkan via environment variable `ALLOW_ADMIN_REGISTRATION`
+
+## Environment Variables
+
+| Variable                      | Description                       | Default       |
+| ----------------------------- | --------------------------------- | ------------- |
+| `SECRET_KEY`                  | Secret key untuk JWT token        | -             |
+| `ALGORITHM`                   | Algorithm untuk JWT               | HS256         |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Durasi token dalam menit          | 1440 (24 jam) |
+| `ALLOW_ADMIN_REGISTRATION`    | Enable/disable admin registration | true          |
+
+**Catatan Keamanan:** Setelah membuat admin pertama, disarankan untuk set `ALLOW_ADMIN_REGISTRATION=false` di file `.env` untuk mencegah registrasi admin yang tidak diinginkan.
 
 ## File Database
 

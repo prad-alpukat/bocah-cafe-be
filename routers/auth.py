@@ -13,7 +13,15 @@ router = APIRouter()
 def register_admin(admin: AdminCreate, db: Session = Depends(get_db)):
     """
     Register new admin user
+    Note: This endpoint can be disabled via ALLOW_ADMIN_REGISTRATION environment variable
     """
+    # Check if registration is allowed
+    if not settings.ALLOW_ADMIN_REGISTRATION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin registration is currently disabled"
+        )
+    
     # Check if username already exists
     db_admin = db.query(Admin).filter(Admin.username == admin.username).first()
     if db_admin:
