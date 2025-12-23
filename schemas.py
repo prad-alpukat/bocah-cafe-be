@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Generic, TypeVar
 from datetime import datetime
 from math import ceil
+import re
 
 # Generic Pagination Schema
 T = TypeVar('T')
@@ -50,16 +51,58 @@ class CafeResponse(CafeBase):
     class Config:
         from_attributes = True
 
+# Role Schemas
+class RoleBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50, description="Role name")
+    slug: str = Field(..., min_length=2, max_length=50, description="Role slug (lowercase, alphanumeric with hyphens)")
+    description: Optional[str] = Field(None, max_length=500, description="Role description")
+
+    @field_validator('slug')
+    @classmethod
+    def validate_slug(cls, v: str) -> str:
+        if not re.match(r'^[a-z0-9-]+$', v):
+            raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
+        return v
+
+class RoleCreate(RoleBase):
+    pass
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=50)
+    slug: Optional[str] = Field(None, min_length=2, max_length=50)
+    description: Optional[str] = Field(None, max_length=500)
+
+    @field_validator('slug')
+    @classmethod
+    def validate_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.match(r'^[a-z0-9-]+$', v):
+            raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
+        return v
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: Optional[str] = None
+    is_system_role: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Auth Schemas
 class AdminCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6)
+    role_id: int = Field(..., description="Role ID")
 
 class AdminResponse(BaseModel):
     id: int
     username: str
+    role: RoleResponse
     created_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -69,7 +112,27 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+    role_id: Optional[int] = None
+    role_slug: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+# Admin Management Schemas
+class AdminUpdateRole(BaseModel):
+    role_id: int = Field(..., description="New role ID for admin")
+
+class AdminUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    password: Optional[str] = Field(None, min_length=6)
+    role_id: Optional[int] = None
+
+class AdminListResponse(BaseModel):
+    id: int
+    username: str
+    role: RoleResponse
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

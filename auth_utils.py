@@ -56,13 +56,50 @@ async def get_current_admin(
         token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")
+        role_id: int = payload.get("role_id")
+        role_slug: str = payload.get("role_slug")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(username=username, role_id=role_id, role_slug=role_slug)
     except JWTError:
         raise credentials_exception
-    
+
     admin = db.query(Admin).filter(Admin.username == token_data.username).first()
     if admin is None:
         raise credentials_exception
     return admin
+
+def require_role(required_role_slug: str):
+    """
+    Dependency factory to require a specific role slug
+    Usage: @router.get("/", dependencies=[Depends(require_role("superadmin"))])
+    """
+    async def role_checker(current_admin: Admin = Depends(get_current_admin)):
+        if current_admin.role.slug != required_role_slug:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role: {required_role_slug}"
+            )
+        return current_admin
+    return role_checker
+
+async def get_superadmin(current_admin: Admin = Depends(get_current_admin)):
+    """Dependency to require superadmin role"""
+    if current_admin.role.slug != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Superadmin role required"
+        )
+    return current_admin
+
+def has_role(admin: Admin, role_slug: str) -> bool:
+    """Check if admin has a specific role by slug"""
+    return admin.role.slug == role_slug
+
+def is_superadmin(admin: Admin) -> bool:
+    """Check if admin is a superadmin"""
+    return admin.role.slug == "superadmin"
+
+def has_role_id(admin: Admin, role_id: int) -> bool:
+    """Check if admin has a specific role by ID"""
+    return admin.role_id == role_id

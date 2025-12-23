@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
-from routers import cafe, auth
+from routers import cafe, auth, upload, admin, role
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -24,6 +24,9 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(cafe.router, prefix="/api/cafe", tags=["Cafe"])
+app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin Management"])
+app.include_router(role.router, prefix="/api/roles", tags=["Role Management"])
 
 @app.get("/")
 def read_root():
