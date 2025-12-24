@@ -9,7 +9,7 @@ from schemas import (
     RoleUpdate,
     RoleResponse,
     PaginatedResponse,
-    PaginationMeta
+    ApiResponse
 )
 from auth_utils import get_superadmin
 
@@ -62,7 +62,7 @@ async def get_all_roles(
         }
     }
 
-@router.get("/{role_id}", response_model=RoleResponse)
+@router.get("/{role_id}", response_model=ApiResponse[RoleResponse])
 async def get_role(
     role_id: int,
     db: Session = Depends(get_db),
@@ -78,9 +78,9 @@ async def get_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    return role
+    return {"data": role}
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ApiResponse[RoleResponse], status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: RoleCreate,
     db: Session = Depends(get_db),
@@ -117,9 +117,9 @@ async def create_role(
     db.commit()
     db.refresh(new_role)
 
-    return new_role
+    return {"data": new_role, "message": "Role created successfully"}
 
-@router.put("/{role_id}", response_model=RoleResponse)
+@router.put("/{role_id}", response_model=ApiResponse[RoleResponse])
 async def update_role(
     role_id: int,
     role_update: RoleUpdate,
@@ -171,7 +171,7 @@ async def update_role(
 
     db.commit()
     db.refresh(role)
-    return role
+    return {"data": role, "message": "Role updated successfully"}
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
@@ -210,7 +210,7 @@ async def delete_role(
     db.commit()
     return None
 
-@router.get("/slug/{slug}", response_model=RoleResponse)
+@router.get("/slug/{slug}", response_model=ApiResponse[RoleResponse])
 async def get_role_by_slug(
     slug: str,
     db: Session = Depends(get_db),
@@ -226,4 +226,4 @@ async def get_role_by_slug(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    return role
+    return {"data": role}

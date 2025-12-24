@@ -3,13 +3,13 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from database import get_db
 from models import Admin, Role
-from schemas import AdminCreate, AdminResponse, Token, LoginRequest
+from schemas import AdminCreate, AdminResponse, Token, LoginRequest, ApiResponse
 from auth_utils import get_password_hash, authenticate_admin, create_access_token, get_current_admin
 from config import settings
 
 router = APIRouter()
 
-@router.post("/register", response_model=AdminResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=ApiResponse[AdminResponse], status_code=status.HTTP_201_CREATED)
 def register_admin(admin: AdminCreate, db: Session = Depends(get_db)):
     """
     Register new admin user
@@ -49,7 +49,7 @@ def register_admin(admin: AdminCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_admin)
 
-    return new_admin
+    return {"data": new_admin, "message": "Admin registered successfully"}
 
 @router.post("/login", response_model=Token)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
@@ -72,9 +72,9 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/me", response_model=AdminResponse)
+@router.get("/me", response_model=ApiResponse[AdminResponse])
 def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
     """
     Get current admin information
     """
-    return current_admin
+    return {"data": current_admin}

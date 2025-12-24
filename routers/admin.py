@@ -11,7 +11,7 @@ from schemas import (
     AdminUpdateRole,
     AdminListResponse,
     PaginatedResponse,
-    PaginationMeta
+    ApiResponse
 )
 from auth_utils import get_password_hash, get_superadmin
 
@@ -61,7 +61,7 @@ async def get_all_admins(
         }
     }
 
-@router.get("/{admin_id}", response_model=AdminResponse)
+@router.get("/{admin_id}", response_model=ApiResponse[AdminResponse])
 async def get_admin(
     admin_id: int,
     db: Session = Depends(get_db),
@@ -77,9 +77,9 @@ async def get_admin(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Admin not found"
         )
-    return admin
+    return {"data": admin}
 
-@router.post("/", response_model=AdminResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ApiResponse[AdminResponse], status_code=status.HTTP_201_CREATED)
 async def create_admin(
     admin: AdminCreate,
     db: Session = Depends(get_db),
@@ -116,9 +116,9 @@ async def create_admin(
     db.commit()
     db.refresh(new_admin)
 
-    return new_admin
+    return {"data": new_admin, "message": "Admin created successfully"}
 
-@router.put("/{admin_id}", response_model=AdminResponse)
+@router.put("/{admin_id}", response_model=ApiResponse[AdminResponse])
 async def update_admin(
     admin_id: int,
     admin_update: AdminUpdate,
@@ -180,9 +180,9 @@ async def update_admin(
 
     db.commit()
     db.refresh(admin)
-    return admin
+    return {"data": admin, "message": "Admin updated successfully"}
 
-@router.patch("/{admin_id}/role", response_model=AdminResponse)
+@router.patch("/{admin_id}/role", response_model=ApiResponse[AdminResponse])
 async def update_admin_role(
     admin_id: int,
     role_update: AdminUpdateRole,
@@ -224,7 +224,7 @@ async def update_admin_role(
     admin.role_id = role_update.role_id
     db.commit()
     db.refresh(admin)
-    return admin
+    return {"data": admin, "message": "Admin role updated successfully"}
 
 @router.delete("/{admin_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_admin(

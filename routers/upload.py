@@ -3,6 +3,7 @@ from typing import Optional
 import uuid
 from datetime import datetime
 from models import Admin
+from schemas import UploadResponse, MessageResponse
 from auth_utils import get_current_admin
 from firebase_config import upload_file_from_memory, delete_file_from_storage
 
@@ -29,7 +30,7 @@ def validate_image(file: UploadFile) -> None:
             detail=f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-@router.post("/image", status_code=status.HTTP_201_CREATED)
+@router.post("/image", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_image(
     file: UploadFile = File(...),
     folder: Optional[str] = "uploads",
@@ -44,7 +45,7 @@ async def upload_image(
         folder: Optional folder name in storage (default: 'uploads')
 
     Returns:
-        dict: Contains image_url and file metadata
+        UploadResponse: Contains image_url and file metadata
     """
     # Validate image
     validate_image(file)
@@ -74,13 +75,15 @@ async def upload_image(
 
         return {
             "message": "Image uploaded successfully",
-            "image_url": image_url,
-            "filename": unique_filename,
-            "original_filename": file.filename,
-            "size": len(content),
-            "content_type": file.content_type,
-            "uploaded_by": current_admin.username,
-            "uploaded_at": datetime.utcnow().isoformat()
+            "data": {
+                "image_url": image_url,
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "size": len(content),
+                "content_type": file.content_type,
+                "uploaded_by": current_admin.username,
+                "uploaded_at": datetime.utcnow().isoformat()
+            }
         }
 
     except Exception as e:
@@ -89,7 +92,7 @@ async def upload_image(
             detail=f"Failed to upload image: {str(e)}"
         )
 
-@router.delete("/image")
+@router.delete("/image", response_model=MessageResponse)
 async def delete_image(
     blob_name: str,
     current_admin: Admin = Depends(get_current_admin)
@@ -102,7 +105,7 @@ async def delete_image(
         blob_name: The path/name of the file in storage (e.g., 'uploads/filename.jpg')
 
     Returns:
-        dict: Success message
+        MessageResponse: Success message
     """
     try:
         success = delete_file_from_storage(blob_name)
@@ -113,11 +116,7 @@ async def delete_image(
                 detail="Image not found or already deleted"
             )
 
-        return {
-            "message": "Image deleted successfully",
-            "deleted_by": current_admin.username,
-            "deleted_at": datetime.utcnow().isoformat()
-        }
+        return {"message": "Image deleted successfully"}
 
     except HTTPException:
         raise
@@ -127,7 +126,7 @@ async def delete_image(
             detail=f"Failed to delete image: {str(e)}"
         )
 
-@router.post("/cafe-image", status_code=status.HTTP_201_CREATED)
+@router.post("/cafe-image", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_cafe_image(
     file: UploadFile = File(...),
     current_admin: Admin = Depends(get_current_admin)
@@ -141,7 +140,7 @@ async def upload_cafe_image(
         file: Image file to upload (JPEG, PNG, WebP, GIF)
 
     Returns:
-        dict: Contains image_url and file metadata
+        UploadResponse: Contains image_url and file metadata
     """
     # Validate image
     validate_image(file)
@@ -171,13 +170,15 @@ async def upload_cafe_image(
 
         return {
             "message": "Cafe image uploaded successfully",
-            "image_url": image_url,
-            "filename": unique_filename,
-            "original_filename": file.filename,
-            "size": len(content),
-            "content_type": file.content_type,
-            "uploaded_by": current_admin.username,
-            "uploaded_at": datetime.utcnow().isoformat()
+            "data": {
+                "image_url": image_url,
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "size": len(content),
+                "content_type": file.content_type,
+                "uploaded_by": current_admin.username,
+                "uploaded_at": datetime.utcnow().isoformat()
+            }
         }
 
     except Exception as e:
