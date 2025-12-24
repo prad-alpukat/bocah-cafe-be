@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from typing import Optional
+from sqlalchemy import or_, asc, desc
+from typing import Optional, Literal
 from math import ceil
 from database import get_db
 from models import Cafe, Admin, Facility
@@ -9,44 +10,104 @@ from auth_utils import get_current_admin
 
 router = APIRouter()
 
+# Valid sort fields
+SORT_FIELDS = {
+    "rating": Cafe.rating,
+    "nama": Cafe.nama,
+    "reviews": Cafe.count_google_review,
+    "terbaru": Cafe.created_at
+}
+
+
 # Public endpoint - List all cafes
 @router.get("/", response_model=PaginatedResponse[CafeResponse])
 def get_all_cafes(
+    # Pagination
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+
+    # Search
+    search: Optional[str] = Query(None, description="Search in cafe name and address"),
+
+    # Filters
     nama: Optional[str] = Query(None, description="Filter by cafe name"),
-    min_rating: Optional[float] = Query(None, ge=0, le=5, description="Minimum rating"),
+    alamat: Optional[str] = Query(None, description="Filter by address"),
+    min_rating: Optional[float] = Query(None, ge=0, le=5, description="Minimum rating (0-5)"),
+    max_rating: Optional[float] = Query(None, ge=0, le=5, description="Maximum rating (0-5)"),
+    min_reviews: Optional[int] = Query(None, ge=0, description="Minimum number of Google reviews"),
     facility_slugs: Optional[str] = Query(None, description="Filter by facility slugs (comma-separated, e.g., 'wifi,mushola,ac')"),
+
+    # Sorting
+    sort_by: Literal["rating", "nama", "reviews", "terbaru"] = Query("rating", description="Sort by field"),
+    sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+
     db: Session = Depends(get_db)
 ):
     """
-    Get list of all cafes with pagination and optional filtering
-    Public endpoint - no authentication required
+    Get list of all cafes with pagination, filtering, and sorting.
+    Public endpoint - no authentication required.
+
+    **Search:** Use `search` to find cafes by name or address.
+
+    **Filters:**
+    - `nama`: Filter by cafe name (partial match)
+    - `alamat`: Filter by address (partial match)
+    - `min_rating` / `max_rating`: Filter by rating range
+    - `min_reviews`: Filter popular cafes by minimum review count
+    - `facility_slugs`: Filter by facilities (comma-separated)
+
+    **Sorting:**
+    - `sort_by`: rating, nama, reviews, terbaru
+    - `sort_order`: asc, desc
     """
     query = db.query(Cafe).options(joinedload(Cafe.facilities))
 
-    # Apply filters
+    # Search filter (searches in nama AND alamat)
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                Cafe.nama.ilike(search_term),
+                Cafe.alamat_lengkap.ilike(search_term)
+            )
+        )
+
+    # Individual filters
     if nama:
         query = query.filter(Cafe.nama.ilike(f"%{nama}%"))
+
+    if alamat:
+        query = query.filter(Cafe.alamat_lengkap.ilike(f"%{alamat}%"))
+
     if min_rating is not None:
         query = query.filter(Cafe.rating >= min_rating)
+
+    if max_rating is not None:
+        query = query.filter(Cafe.rating <= max_rating)
+
+    if min_reviews is not None:
+        query = query.filter(Cafe.count_google_review >= min_reviews)
+
+    # Facility filter
     if facility_slugs:
         slugs = [s.strip() for s in facility_slugs.split(",") if s.strip()]
-        if slugs:
-            for slug in slugs:
-                query = query.filter(Cafe.facilities.any(Facility.slug == slug))
+        for slug in slugs:
+            query = query.filter(Cafe.facilities.any(Facility.slug == slug))
 
-    # Get total count before pagination (need distinct due to join)
+    # Get total count before pagination
     total = query.distinct().count()
 
-    # Order by rating descending, then by name
-    query = query.order_by(Cafe.rating.desc(), Cafe.nama)
+    # Apply sorting
+    sort_column = SORT_FIELDS.get(sort_by, Cafe.rating)
+    if sort_order == "desc":
+        query = query.order_by(desc(sort_column).nulls_last(), Cafe.nama)
+    else:
+        query = query.order_by(asc(sort_column).nulls_last(), Cafe.nama)
 
-    # Calculate offset and apply pagination
+    # Pagination
     offset = (page - 1) * page_size
     cafes = query.distinct().offset(offset).limit(page_size).all()
 
-    # Calculate total pages
     total_pages = ceil(total / page_size) if total > 0 else 0
 
     return {
