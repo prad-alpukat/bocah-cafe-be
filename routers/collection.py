@@ -104,8 +104,8 @@ def get_collection_by_slug(slug: str, db: Session = Depends(get_db)):
             detail="Collection not found"
         )
 
-    # Only allow public collections
-    if collection.visibility == 'private':
+    # Only allow public and password_protected collections
+    if collection.visibility not in ['public', 'password_protected']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This collection is private"
@@ -137,8 +137,8 @@ def get_collection_by_id(collection_id: str, db: Session = Depends(get_db)):
             detail="Collection not found"
         )
 
-    # Only allow public collections
-    if collection.visibility == 'private':
+    # Only allow public and password_protected collections
+    if collection.visibility not in ['public', 'password_protected']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This collection is private"
