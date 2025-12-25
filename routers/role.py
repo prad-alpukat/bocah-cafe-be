@@ -64,7 +64,7 @@ async def get_all_roles(
 
 @router.get("/{role_id}", response_model=ApiResponse[RoleResponse])
 async def get_role(
-    role_id: int,
+    role_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
 ):
@@ -121,7 +121,7 @@ async def create_role(
 
 @router.put("/{role_id}", response_model=ApiResponse[RoleResponse])
 async def update_role(
-    role_id: int,
+    role_id: str,
     role_update: RoleUpdate,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
@@ -175,7 +175,7 @@ async def update_role(
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
-    role_id: int,
+    role_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
 ):

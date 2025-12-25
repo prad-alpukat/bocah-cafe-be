@@ -122,7 +122,7 @@ def get_all_cafes(
 
 # Public endpoint - Get single cafe by ID
 @router.get("/{cafe_id}", response_model=ApiResponse[CafeResponse])
-def get_cafe(cafe_id: int, db: Session = Depends(get_db)):
+def get_cafe(cafe_id: str, db: Session = Depends(get_db)):
     """
     Get single cafe by ID
     Public endpoint - no authentication required
@@ -166,7 +166,7 @@ def create_cafe(
 
 @router.put("/{cafe_id}", response_model=ApiResponse[CafeResponse])
 def update_cafe(
-    cafe_id: int,
+    cafe_id: str,
     cafe_update: CafeUpdate,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -206,7 +206,7 @@ def update_cafe(
 
 @router.delete("/{cafe_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cafe(
-    cafe_id: int,
+    cafe_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):

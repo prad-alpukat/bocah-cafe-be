@@ -2,19 +2,31 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Tex
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
+import uuid
+
+def generate_uuid():
+    return str(uuid.uuid4())
 
 # Association table for many-to-many relationship between Cafe and Facility
 cafe_facilities = Table(
     'cafe_facilities',
     Base.metadata,
-    Column('cafe_id', Integer, ForeignKey('cafes.id', ondelete='CASCADE'), primary_key=True),
-    Column('facility_id', Integer, ForeignKey('facilities.id', ondelete='CASCADE'), primary_key=True)
+    Column('cafe_id', String(36), ForeignKey('cafes.id', ondelete='CASCADE'), primary_key=True),
+    Column('facility_id', String(36), ForeignKey('facilities.id', ondelete='CASCADE'), primary_key=True)
+)
+
+# Association table for many-to-many relationship between Collection and Cafe
+collection_cafes = Table(
+    'collection_cafes',
+    Base.metadata,
+    Column('collection_id', String(36), ForeignKey('collections.id', ondelete='CASCADE'), primary_key=True),
+    Column('cafe_id', String(36), ForeignKey('cafes.id', ondelete='CASCADE'), primary_key=True)
 )
 
 class Facility(Base):
     __tablename__ = "facilities"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     slug = Column(String, unique=True, index=True, nullable=False)
     icon = Column(String, nullable=True)  # Icon name or URL
@@ -28,7 +40,7 @@ class Facility(Base):
 class Cafe(Base):
     __tablename__ = "cafes"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     nama = Column(String, index=True, nullable=False)
     gambar_thumbnail = Column(String)
     no_hp = Column(String)
@@ -41,13 +53,14 @@ class Cafe(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship
+    # Relationships
     facilities = relationship("Facility", secondary=cafe_facilities, back_populates="cafes")
+    collections = relationship("Collection", secondary=collection_cafes, back_populates="cafes")
 
 class Role(Base):
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     slug = Column(String, unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
@@ -61,11 +74,30 @@ class Role(Base):
 class Admin(Base):
     __tablename__ = "admins"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
+    role_id = Column(String(36), ForeignKey("roles.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationship
     role = relationship("Role", back_populates="admins")
+
+class Collection(Base):
+    __tablename__ = "collections"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
+    name = Column(String(100), nullable=False)
+    slug = Column(String(100), unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    gambar_cover = Column(String, nullable=True)
+
+    # Visibility: 'public', 'private', 'password_protected'
+    visibility = Column(String(20), default='public', nullable=False)
+    password_hash = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationship
+    cafes = relationship("Cafe", secondary=collection_cafes, back_populates="collections")

@@ -56,7 +56,7 @@ async def get_current_admin(
         token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")
-        role_id: int = payload.get("role_id")
+        role_id: str = payload.get("role_id")
         role_slug: str = payload.get("role_slug")
         if username is None:
             raise credentials_exception
@@ -100,6 +100,6 @@ def is_superadmin(admin: Admin) -> bool:
     """Check if admin is a superadmin"""
     return admin.role.slug == "superadmin"
 
-def has_role_id(admin: Admin, role_id: int) -> bool:
+def has_role_id(admin: Admin, role_id: str) -> bool:
     """Check if admin has a specific role by ID"""
     return admin.role_id == role_id

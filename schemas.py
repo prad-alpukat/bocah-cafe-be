@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Generic, TypeVar
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, List, Generic, TypeVar, Literal
 from datetime import datetime
 from math import ceil
 import re
@@ -63,7 +63,7 @@ class FacilityUpdate(BaseModel):
         return v
 
 class FacilityResponse(FacilityBase):
-    id: int
+    id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -83,7 +83,7 @@ class CafeBase(BaseModel):
     alamat_lengkap: Optional[str] = Field(None, description="Alamat lengkap")
 
 class CafeCreate(CafeBase):
-    facility_ids: Optional[List[int]] = Field(None, description="List of facility IDs")
+    facility_ids: Optional[List[str]] = Field(None, description="List of facility IDs")
 
 class CafeUpdate(BaseModel):
     nama: Optional[str] = None
@@ -95,10 +95,10 @@ class CafeUpdate(BaseModel):
     count_google_review: Optional[int] = Field(None, ge=0)
     jam_buka: Optional[str] = None
     alamat_lengkap: Optional[str] = None
-    facility_ids: Optional[List[int]] = Field(None, description="List of facility IDs to replace current facilities")
+    facility_ids: Optional[List[str]] = Field(None, description="List of facility IDs to replace current facilities")
 
 class CafeResponse(CafeBase):
-    id: int
+    id: str
     facilities: List[FacilityResponse] = Field(default_factory=list, description="List of facilities")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -135,7 +135,7 @@ class RoleUpdate(BaseModel):
         return v
 
 class RoleResponse(BaseModel):
-    id: int
+    id: str
     name: str
     slug: str
     description: Optional[str] = None
@@ -150,10 +150,10 @@ class RoleResponse(BaseModel):
 class AdminCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6)
-    role_id: int = Field(..., description="Role ID")
+    role_id: str = Field(..., description="Role ID")
 
 class AdminResponse(BaseModel):
-    id: int
+    id: str
     username: str
     role: RoleResponse
     created_at: Optional[datetime] = None
@@ -167,7 +167,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
-    role_id: Optional[int] = None
+    role_id: Optional[str] = None
     role_slug: Optional[str] = None
 
 class LoginRequest(BaseModel):
@@ -176,18 +176,102 @@ class LoginRequest(BaseModel):
 
 # Admin Management Schemas
 class AdminUpdateRole(BaseModel):
-    role_id: int = Field(..., description="New role ID for admin")
+    role_id: str = Field(..., description="New role ID for admin")
 
 class AdminUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=50)
     password: Optional[str] = Field(None, min_length=6)
-    role_id: Optional[int] = None
+    role_id: Optional[str] = None
 
 class AdminListResponse(BaseModel):
-    id: int
+    id: str
     username: str
     role: RoleResponse
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+# Collection Schemas
+class CollectionBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100, description="Nama koleksi")
+    slug: str = Field(..., min_length=2, max_length=100, description="Slug koleksi (lowercase, alphanumeric with hyphens)")
+    description: Optional[str] = Field(None, max_length=1000, description="Deskripsi koleksi")
+    gambar_cover: Optional[str] = Field(None, description="URL gambar cover")
+    visibility: Literal['public', 'private', 'password_protected'] = Field(
+        default='public',
+        description="Visibility: public, private, atau password_protected"
+    )
+
+    @field_validator('slug')
+    @classmethod
+    def validate_slug(cls, v: str) -> str:
+        if not re.match(r'^[a-z0-9-]+$', v):
+            raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
+        return v
+
+class CollectionCreate(CollectionBase):
+    password: Optional[str] = Field(None, min_length=4, description="Password untuk visibility password_protected")
+    cafe_ids: Optional[List[str]] = Field(None, description="List of cafe IDs to add")
+
+    @model_validator(mode='after')
+    def validate_password_required(self):
+        if self.visibility == 'password_protected' and not self.password:
+            raise ValueError('Password is required when visibility is password_protected')
+        return self
+
+class CollectionUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    slug: Optional[str] = Field(None, min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=1000)
+    gambar_cover: Optional[str] = None
+    visibility: Optional[Literal['public', 'private', 'password_protected']] = None
+    password: Optional[str] = Field(None, min_length=4, description="New password for password_protected visibility")
+    cafe_ids: Optional[List[str]] = Field(None, description="List of cafe IDs to replace current cafes")
+
+    @field_validator('slug')
+    @classmethod
+    def validate_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.match(r'^[a-z0-9-]+$', v):
+            raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
+        return v
+
+class CollectionResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    description: Optional[str] = None
+    gambar_cover: Optional[str] = None
+    visibility: str
+    cafe_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class CollectionDetailResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    description: Optional[str] = None
+    gambar_cover: Optional[str] = None
+    visibility: str
+    cafe_count: int = 0
+    cafes: List[CafeResponse] = Field(default_factory=list, description="List of cafes in collection")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class CollectionAccessRequest(BaseModel):
+    password: str = Field(..., description="Password untuk akses koleksi")
+
+class CollectionAccessResponse(BaseModel):
+    access_granted: bool
+    collection: Optional[CollectionDetailResponse] = None
+    message: str
+
+class CollectionCafesUpdate(BaseModel):
+    cafe_ids: List[str] = Field(..., min_length=1, description="List of cafe IDs to add/remove")

@@ -50,7 +50,7 @@ def get_all_facilities(
 
 # Public endpoint - Get single facility by ID
 @router.get("/{facility_id}", response_model=ApiResponse[FacilityResponse])
-def get_facility(facility_id: int, db: Session = Depends(get_db)):
+def get_facility(facility_id: str, db: Session = Depends(get_db)):
     """
     Get single facility by ID
     Public endpoint - no authentication required
@@ -92,7 +92,7 @@ def create_facility(
 
 @router.put("/{facility_id}", response_model=ApiResponse[FacilityResponse])
 def update_facility(
-    facility_id: int,
+    facility_id: str,
     facility_update: FacilityUpdate,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -133,7 +133,7 @@ def update_facility(
 
 @router.delete("/{facility_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_facility(
-    facility_id: int,
+    facility_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):

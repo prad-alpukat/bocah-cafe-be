@@ -22,7 +22,7 @@ async def get_all_admins(
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
     username: Optional[str] = Query(None, description="Filter by username"),
-    role_id: Optional[int] = Query(None, description="Filter by role ID"),
+    role_id: Optional[str] = Query(None, description="Filter by role ID"),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
 ):
@@ -63,7 +63,7 @@ async def get_all_admins(
 
 @router.get("/{admin_id}", response_model=ApiResponse[AdminResponse])
 async def get_admin(
-    admin_id: int,
+    admin_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
 ):
@@ -120,7 +120,7 @@ async def create_admin(
 
 @router.put("/{admin_id}", response_model=ApiResponse[AdminResponse])
 async def update_admin(
-    admin_id: int,
+    admin_id: str,
     admin_update: AdminUpdate,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
@@ -184,7 +184,7 @@ async def update_admin(
 
 @router.patch("/{admin_id}/role", response_model=ApiResponse[AdminResponse])
 async def update_admin_role(
-    admin_id: int,
+    admin_id: str,
     role_update: AdminUpdateRole,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
@@ -228,7 +228,7 @@ async def update_admin_role(
 
 @router.delete("/{admin_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_admin(
-    admin_id: int,
+    admin_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_superadmin)
 ):
