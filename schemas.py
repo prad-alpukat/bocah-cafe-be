@@ -85,6 +85,31 @@ class CafeBase(BaseModel):
 class CafeCreate(CafeBase):
     facility_ids: Optional[List[str]] = Field(None, description="List of facility IDs")
 
+# Bulk Import Schemas
+class CafeBulkItem(CafeBase):
+    """Single cafe item for bulk import - uses facility slugs instead of IDs"""
+    facility_slugs: Optional[List[str]] = Field(None, description="List of facility slugs (e.g., ['wifi', 'ac', 'mushola'])")
+
+class CafeBulkCreate(BaseModel):
+    """Request body for bulk cafe import"""
+    cafes: List[CafeBulkItem] = Field(..., min_length=1, max_length=500, description="List of cafes to import (max 500)")
+    skip_duplicates: bool = Field(default=True, description="Skip cafes with duplicate names instead of failing")
+
+class CafeBulkResultItem(BaseModel):
+    """Result for a single cafe in bulk import"""
+    nama: str
+    success: bool
+    id: Optional[str] = None
+    error: Optional[str] = None
+
+class CafeBulkResponse(BaseModel):
+    """Response for bulk cafe import"""
+    total: int = Field(..., description="Total cafes in request")
+    created: int = Field(..., description="Successfully created")
+    skipped: int = Field(..., description="Skipped (duplicates)")
+    failed: int = Field(..., description="Failed to create")
+    results: List[CafeBulkResultItem] = Field(..., description="Result for each cafe")
+
 class CafeUpdate(BaseModel):
     nama: Optional[str] = None
     gambar_thumbnail: Optional[str] = None

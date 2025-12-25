@@ -5,7 +5,10 @@ from typing import Optional, Literal
 from math import ceil
 from database import get_db
 from models import Cafe, Admin, Facility
-from schemas import CafeCreate, CafeUpdate, CafeResponse, PaginatedResponse, ApiResponse
+from schemas import (
+    CafeCreate, CafeUpdate, CafeResponse, PaginatedResponse, ApiResponse,
+    CafeBulkCreate, CafeBulkResponse, CafeBulkResultItem
+)
 from auth_utils import get_current_admin
 
 router = APIRouter()
@@ -163,6 +166,118 @@ def create_cafe(
     db.commit()
     db.refresh(new_cafe)
     return {"data": new_cafe, "message": "Cafe created successfully"}
+
+
+@router.post("/bulk", response_model=CafeBulkResponse, status_code=status.HTTP_201_CREATED)
+def bulk_import_cafes(
+    bulk_data: CafeBulkCreate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Bulk import cafes from scraped data (e.g., Google Maps).
+    Admin only - requires authentication.
+
+    - Accepts up to 500 cafes per request
+    - Uses facility slugs instead of IDs for easier mapping
+    - Option to skip duplicates (by name) or fail on duplicates
+
+    Example request body:
+    ```json
+    {
+        "cafes": [
+            {
+                "nama": "Kopi Kenangan",
+                "alamat_lengkap": "Jl. Sudirman No. 1",
+                "rating": 4.5,
+                "count_google_review": 1234,
+                "jam_buka": "08:00 - 22:00",
+                "facility_slugs": ["wifi", "ac", "power-outlet"]
+            }
+        ],
+        "skip_duplicates": true
+    }
+    ```
+    """
+    results: list[CafeBulkResultItem] = []
+    created_count = 0
+    skipped_count = 0
+    failed_count = 0
+
+    # Pre-fetch all facilities for efficient lookup
+    all_facilities = db.query(Facility).all()
+    facility_map = {f.slug: f for f in all_facilities}
+
+    # Get existing cafe names for duplicate checking
+    existing_names = set(
+        name[0].lower() for name in db.query(Cafe.nama).all()
+    )
+
+    for cafe_item in bulk_data.cafes:
+        try:
+            # Check for duplicate
+            if cafe_item.nama.lower() in existing_names:
+                if bulk_data.skip_duplicates:
+                    results.append(CafeBulkResultItem(
+                        nama=cafe_item.nama,
+                        success=False,
+                        error="Duplicate: cafe with this name already exists"
+                    ))
+                    skipped_count += 1
+                    continue
+                else:
+                    results.append(CafeBulkResultItem(
+                        nama=cafe_item.nama,
+                        success=False,
+                        error="Duplicate: cafe with this name already exists"
+                    ))
+                    failed_count += 1
+                    continue
+
+            # Create cafe
+            cafe_data = cafe_item.model_dump(exclude={'facility_slugs'})
+            new_cafe = Cafe(**cafe_data)
+
+            # Map facility slugs to facilities
+            if cafe_item.facility_slugs:
+                facilities = []
+                for slug in cafe_item.facility_slugs:
+                    if slug in facility_map:
+                        facilities.append(facility_map[slug])
+                new_cafe.facilities = facilities
+
+            db.add(new_cafe)
+            db.flush()  # Get the ID without committing
+
+            # Add to existing names to catch duplicates within the same batch
+            existing_names.add(cafe_item.nama.lower())
+
+            results.append(CafeBulkResultItem(
+                nama=cafe_item.nama,
+                success=True,
+                id=new_cafe.id
+            ))
+            created_count += 1
+
+        except Exception as e:
+            results.append(CafeBulkResultItem(
+                nama=cafe_item.nama,
+                success=False,
+                error=str(e)
+            ))
+            failed_count += 1
+
+    # Commit all successful inserts
+    db.commit()
+
+    return CafeBulkResponse(
+        total=len(bulk_data.cafes),
+        created=created_count,
+        skipped=skipped_count,
+        failed=failed_count,
+        results=results
+    )
+
 
 @router.put("/{cafe_id}", response_model=ApiResponse[CafeResponse])
 def update_cafe(
