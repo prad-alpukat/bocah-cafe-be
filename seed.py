@@ -10,10 +10,11 @@ Usage:
     python seed.py --help       # Show help
 
 Available seeders:
-    - roles      : System roles (superadmin, admin, writer, viewer)
-    - admins     : Default admin user (admin/password)
-    - facilities : Cafe facilities (wifi, mushola, ac, etc.)
-    - cafes      : Sample cafe data
+    - roles       : System roles (superadmin, admin, writer, viewer)
+    - admins      : Default admin user (admin/password)
+    - facilities  : Cafe facilities (wifi, mushola, ac, etc.)
+    - cafes       : Sample cafe data (100 cafes)
+    - collections : Sample collections (public, private, password protected)
 """
 
 import argparse
@@ -24,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from database import engine, Base, SessionLocal
-from seeders import RoleSeeder, AdminSeeder, FacilitySeeder, CafeSeeder
+from seeders import RoleSeeder, AdminSeeder, FacilitySeeder, CafeSeeder, CollectionSeeder
 
 
 # Seeder registry - order matters!
@@ -33,6 +34,7 @@ SEEDERS = [
     ("admins", AdminSeeder),
     ("facilities", FacilitySeeder),
     ("cafes", CafeSeeder),
+    ("collections", CollectionSeeder),
 ]
 
 

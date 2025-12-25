@@ -13,11 +13,13 @@ from .role_seeder import RoleSeeder
 from .admin_seeder import AdminSeeder
 from .facility_seeder import FacilitySeeder
 from .cafe_seeder import CafeSeeder
+from .collection_seeder import CollectionSeeder
 
 __all__ = [
     'BaseSeeder',
     'RoleSeeder',
     'AdminSeeder',
     'FacilitySeeder',
-    'CafeSeeder'
+    'CafeSeeder',
+    'CollectionSeeder'
 ]
