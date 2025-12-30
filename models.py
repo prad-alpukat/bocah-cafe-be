@@ -27,9 +27,9 @@ class Facility(Base):
     __tablename__ = "facilities"
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
-    name = Column(String, unique=True, index=True, nullable=False)
-    slug = Column(String, unique=True, index=True, nullable=False)
-    icon = Column(String, nullable=True)  # Icon name or URL
+    name = Column(String(255), unique=True, index=True, nullable=False)
+    slug = Column(String(255), unique=True, index=True, nullable=False)
+    icon = Column(String(500), nullable=True)  # Icon name or URL
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -41,15 +41,15 @@ class Cafe(Base):
     __tablename__ = "cafes"
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
-    nama = Column(String, index=True, nullable=False)
-    gambar_thumbnail = Column(String)
-    no_hp = Column(String)
-    link_website = Column(String)
+    nama = Column(String(255), index=True, nullable=False)
+    gambar_thumbnail = Column(String(500))
+    no_hp = Column(String(50))
+    link_website = Column(String(500))
     rating = Column(Float)
-    range_price = Column(String)
+    range_price = Column(String(100))
     count_google_review = Column(Integer)
-    jam_buka = Column(String)
-    alamat_lengkap = Column(String)
+    jam_buka = Column(String(255))
+    alamat_lengkap = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -61,8 +61,8 @@ class Role(Base):
     __tablename__ = "roles"
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
-    name = Column(String, unique=True, index=True, nullable=False)
-    slug = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    slug = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
     is_system_role = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -75,8 +75,8 @@ class Admin(Base):
     __tablename__ = "admins"
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
     role_id = Column(String(36), ForeignKey("roles.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -90,11 +90,11 @@ class Collection(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
-    gambar_cover = Column(String, nullable=True)
+    gambar_cover = Column(String(500), nullable=True)
 
     # Visibility: 'public', 'private', 'password_protected'
     visibility = Column(String(20), default='public', nullable=False)
-    password_hash = Column(String, nullable=True)
+    password_hash = Column(String(255), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

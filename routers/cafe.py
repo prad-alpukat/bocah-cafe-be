@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, asc, desc
+from sqlalchemy import or_, asc, desc, case
 from typing import Optional, Literal
 from math import ceil
 from database import get_db
@@ -100,12 +100,13 @@ def get_all_cafes(
     # Get total count before pagination
     total = query.distinct().count()
 
-    # Apply sorting
+    # Apply sorting (MySQL compatible - NULLS LAST using CASE)
     sort_column = SORT_FIELDS.get(sort_by, Cafe.rating)
+    nulls_last_order = case((sort_column.is_(None), 1), else_=0)
     if sort_order == "desc":
-        query = query.order_by(desc(sort_column).nulls_last(), Cafe.nama)
+        query = query.order_by(nulls_last_order, desc(sort_column), Cafe.nama)
     else:
-        query = query.order_by(asc(sort_column).nulls_last(), Cafe.nama)
+        query = query.order_by(nulls_last_order, asc(sort_column), Cafe.nama)
 
     # Pagination
     offset = (page - 1) * page_size
