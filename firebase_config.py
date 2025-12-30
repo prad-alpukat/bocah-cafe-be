@@ -1,9 +1,17 @@
+import json
 import firebase_admin
 from firebase_admin import credentials, storage
 from config import settings
 
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
+# Support loading from env var (for cloud) or file (for local)
+if settings.FIREBASE_CREDENTIALS:
+    # Load from environment variable (JSON string)
+    cred_dict = json.loads(settings.FIREBASE_CREDENTIALS)
+    cred = credentials.Certificate(cred_dict)
+else:
+    # Load from file path (local development)
+    cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
 
 # Initialize app with storage bucket
 firebase_admin.initialize_app(cred, {

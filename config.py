@@ -12,7 +12,8 @@ class Settings(BaseSettings):
 
     # Firebase Configuration
     FIREBASE_STORAGE_BUCKET: str = "your-project-id.appspot.com"
-    FIREBASE_SERVICE_ACCOUNT_PATH: str = "path/to/serviceAccountKey.json"
+    FIREBASE_SERVICE_ACCOUNT_PATH: str = "firebase-key.json"
+    FIREBASE_CREDENTIALS: Optional[str] = None  # JSON string for cloud deployment
 
     class Config:
         env_file = ".env"
