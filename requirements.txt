@@ -40,7 +40,7 @@ uvicorn==0.38.0
 uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
-sqlalchemy==2.0.25
+sqlalchemy==2.0.45
 python-jose[cryptography]==3.3.0
 passlib==1.7.4
 bcrypt==4.1.2
@@ -48,4 +48,3 @@ pydantic-settings==2.1.0
 firebase-admin==6.5.0
 pymysql==1.1.0
 cryptography==42.0.0
-gunicorn==21.2.0
