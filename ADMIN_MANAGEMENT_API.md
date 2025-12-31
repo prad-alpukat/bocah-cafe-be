@@ -11,6 +11,7 @@ http://localhost:8000/api/admin
 ## Authentication
 
 Semua endpoint memerlukan:
+
 - Header: `Authorization: Bearer YOUR_TOKEN`
 - Role: `superadmin`
 
@@ -27,6 +28,7 @@ Mendapatkan daftar semua admin dengan pagination dan filtering.
 **Endpoint:** `GET /api/admin/`
 
 **Query Parameters:**
+
 - `page` (optional, default: 1) - Nomor halaman
 - `page_size` (optional, default: 10, max: 100) - Jumlah item per halaman
 - `username` (optional) - Filter berdasarkan username (case-insensitive partial match)
@@ -84,6 +86,7 @@ Mendapatkan detail admin berdasarkan ID.
 **Endpoint:** `GET /api/admin/{admin_id}`
 
 **Path Parameters:**
+
 - `admin_id` (required) - ID admin
 
 **Request Example:**
@@ -105,6 +108,7 @@ curl -X GET "http://localhost:8000/api/admin/1" \
 ```
 
 **Error Responses:**
+
 - `404 Not Found` - Admin tidak ditemukan
 
 ```json
@@ -132,6 +136,7 @@ Membuat admin baru. Alternative dari endpoint `/api/auth/register` yang bisa dim
 ```
 
 **Fields:**
+
 - `username` (required) - Username (3-50 karakter)
 - `password` (required) - Password (minimum 6 karakter)
 - `role` (optional, default: "writer") - Role admin (`superadmin` atau `writer`)
@@ -190,6 +195,7 @@ Update informasi admin (username, password, atau role).
 **Endpoint:** `PUT /api/admin/{admin_id}`
 
 **Path Parameters:**
+
 - `admin_id` (required) - ID admin yang akan diupdate
 
 **Request Body:**
@@ -203,6 +209,7 @@ Update informasi admin (username, password, atau role).
 ```
 
 **Fields (semua optional):**
+
 - `username` (optional) - Username baru (3-50 karakter)
 - `password` (optional) - Password baru (minimum 6 karakter)
 - `role` (optional) - Role baru (`superadmin` atau `writer`)
@@ -277,6 +284,7 @@ Update hanya role admin saja (endpoint khusus untuk update role).
 **Endpoint:** `PATCH /api/admin/{admin_id}/role`
 
 **Path Parameters:**
+
 - `admin_id` (required) - ID admin yang akan diupdate
 
 **Request Body:**
@@ -288,6 +296,7 @@ Update hanya role admin saja (endpoint khusus untuk update role).
 ```
 
 **Fields:**
+
 - `role` (required) - Role baru (`superadmin` atau `writer`)
 
 **Request Examples:**
@@ -341,6 +350,7 @@ Menghapus admin berdasarkan ID.
 **Endpoint:** `DELETE /api/admin/{admin_id}`
 
 **Path Parameters:**
+
 - `admin_id` (required) - ID admin yang akan dihapus
 
 **Request Example:**
@@ -468,15 +478,15 @@ curl -X GET "http://localhost:8000/api/admin/" \
 
 ## Error Codes Summary
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 OK | Request berhasil |
-| 201 Created | Admin berhasil dibuat |
-| 204 No Content | Admin berhasil dihapus |
-| 400 Bad Request | Validation error atau business logic error |
-| 401 Unauthorized | Token tidak valid atau expired |
-| 403 Forbidden | Tidak memiliki akses (bukan superadmin) |
-| 404 Not Found | Admin tidak ditemukan |
+| Status Code      | Description                                |
+| ---------------- | ------------------------------------------ |
+| 200 OK           | Request berhasil                           |
+| 201 Created      | Admin berhasil dibuat                      |
+| 204 No Content   | Admin berhasil dihapus                     |
+| 400 Bad Request  | Validation error atau business logic error |
+| 401 Unauthorized | Token tidak valid atau expired             |
+| 403 Forbidden    | Tidak memiliki akses (bukan superadmin)    |
+| 404 Not Found    | Admin tidak ditemukan                      |
 
 ---
 
@@ -538,14 +548,15 @@ export async function getAdmins(params?: {
 }): Promise<PaginatedResponse<AdminListResponse>> {
   const token = getAuthToken();
   const searchParams = new URLSearchParams();
-  if (params?.page) searchParams.set('page', params.page.toString());
-  if (params?.page_size) searchParams.set('page_size', params.page_size.toString());
-  if (params?.username) searchParams.set('username', params.username);
-  if (params?.role) searchParams.set('role', params.role);
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.page_size)
+    searchParams.set("page_size", params.page_size.toString());
+  if (params?.username) searchParams.set("username", params.username);
+  if (params?.role) searchParams.set("role", params.role);
 
   const url = `${API_BASE}/api/admin/?${searchParams}`;
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<PaginatedResponse<AdminListResponse>>(response);
 }
@@ -554,7 +565,7 @@ export async function getAdmins(params?: {
 export async function getAdmin(id: number): Promise<AdminResponse> {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE}/api/admin/${id}`, {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<AdminResponse>(response);
 }
@@ -563,40 +574,46 @@ export async function getAdmin(id: number): Promise<AdminResponse> {
 export async function createAdmin(admin: AdminCreate): Promise<AdminResponse> {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE}/api/admin/`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(admin)
+    body: JSON.stringify(admin),
   });
   return handleResponse<AdminResponse>(response);
 }
 
 // Update admin
-export async function updateAdmin(id: number, admin: AdminUpdate): Promise<AdminResponse> {
+export async function updateAdmin(
+  id: number,
+  admin: AdminUpdate
+): Promise<AdminResponse> {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE}/api/admin/${id}`, {
-    method: 'PUT',
+    method: "PUT",
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(admin)
+    body: JSON.stringify(admin),
   });
   return handleResponse<AdminResponse>(response);
 }
 
 // Update admin role
-export async function updateAdminRole(id: number, role: AdminRole): Promise<AdminResponse> {
+export async function updateAdminRole(
+  id: number,
+  role: AdminRole
+): Promise<AdminResponse> {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE}/api/admin/${id}/role`, {
-    method: 'PATCH',
+    method: "PATCH",
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ role })
+    body: JSON.stringify({ role }),
   });
   return handleResponse<AdminResponse>(response);
 }
@@ -605,11 +622,13 @@ export async function updateAdminRole(id: number, role: AdminRole): Promise<Admi
 export async function deleteAdmin(id: number): Promise<void> {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE}/api/admin/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` }
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "An error occurred" }));
     throw new Error(error.detail || `HTTP error! status: ${response.status}`);
   }
 }
