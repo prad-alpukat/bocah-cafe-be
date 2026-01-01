@@ -122,6 +122,12 @@ def natural_language_search(
             "message": "Gw adalah asisten pencari cafe terbaik! 🏪☕ Tanya gw soal cafe, nongkrong, atau tempat ngopi aja ya!",
             "type": "identity"
         }
+    elif query_type == "creator":
+        return {
+            "query": body.query,
+            "message": "Aplikasi ini dibuat oleh Praditya Aldi Syahputra 👨‍💻 Keren kan? Sekarang mau cari cafe apa nih?",
+            "type": "creator"
+        }
     elif query_type == "greeting":
         return {
             "query": body.query,
@@ -220,6 +226,12 @@ def search_cafes_nl(
             "message": "Gw adalah asisten pencari cafe terbaik! 🏪☕ Tanya gw soal cafe, nongkrong, atau tempat ngopi aja ya!",
             "type": "identity"
         }
+    elif parsed.query_type == "creator":
+        return {
+            "query": q,
+            "message": "Aplikasi ini dibuat oleh Praditya Aldi Syahputra 👨‍💻 Keren kan? Sekarang mau cari cafe apa nih?",
+            "type": "creator"
+        }
     elif parsed.query_type == "greeting":
         return {
             "query": q,
@@ -287,6 +299,8 @@ def get_search_suggestions():
             "tempat meeting di bandung",
             "cafe aesthetic untuk foto",
             "coffee shop dengan live music",
+            "3 cafe untuk nongkrong",
+            "5 tempat ngopi murah",
         ],
         "available_facilities": [
             {"slug": "wifi", "name": "WiFi"},

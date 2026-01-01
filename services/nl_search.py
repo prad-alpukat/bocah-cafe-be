@@ -21,6 +21,7 @@ class ParsedQuery(BaseModel):
     intent: Optional[str] = None  # "kerja", "nongkrong", "meeting", "foto", etc.
     sort_by: Optional[str] = None  # "rating", "reviews", "terbaru"
     entity_type: str = "cafe"  # "cafe", "facility", "collection", "all"
+    limit: Optional[int] = None  # jumlah hasil yang diminta user (e.g. "3 cafe" -> 3)
 
 
 class NLSearchService:
@@ -66,16 +67,29 @@ Entity types:
 PENTING tentang query_type:
 - "search": query mencari cafe/collection/facility (default)
 - "identity": user bertanya tentang siapa kamu/bot ini (contoh: "kamu siapa?", "siapa kamu", "lu siapa", "what are you")
+- "creator": user bertanya siapa yang membuat app/bot ini (contoh: "siapa yang buat", "who made this", "siapa pembuat", "developer nya siapa")
 - "greeting": user menyapa (contoh: "halo", "hi", "selamat pagi")
 - "irrelevant": query tidak relevan dengan cafe sama sekali (contoh: "siapa presiden", "apa itu python", "cuaca hari ini")
 
 Jika query_type bukan "search", set is_relevant = false.
 
+PENTING tentang search_text:
+- search_text HANYA diisi jika user mencari nama cafe SPESIFIK atau kata kunci unik
+- JANGAN isi search_text dengan kata-kata umum seperti: nongkrong, nongki, kerja, santai, ngopi, kopi, cafe, coffee
+- Jika user bilang "cafe untuk nongki" atau "tempat nongkrong", itu adalah INTENT bukan search_text
+- search_text = null untuk kebanyakan query, kecuali user sebut nama spesifik
+
+PENTING tentang limit:
+- Jika user menyebutkan ANGKA di awal query seperti "3 cafe", "5 tempat nongkrong", "10 kafe wifi", extract angka tersebut sebagai limit
+- Jika user bilang "beberapa" atau "few" set limit = 3
+- Jika tidak ada angka spesifik, set limit = null (akan pakai default)
+- Limit maksimal 100
+
 Respond dalam format JSON SAJA tanpa markdown code block:
 {
     "is_relevant": true atau false,
-    "query_type": "search" atau "identity" atau "greeting" atau "irrelevant",
-    "search_text": "kata kunci untuk full-text search atau null",
+    "query_type": "search" atau "identity" atau "creator" atau "greeting" atau "irrelevant",
+    "search_text": "HANYA nama cafe spesifik atau null",
     "facilities": ["slug-facility-1", "slug-facility-2"],
     "min_rating": null atau angka 0-5,
     "max_rating": null atau angka 0-5,
@@ -83,7 +97,8 @@ Respond dalam format JSON SAJA tanpa markdown code block:
     "location": "nama lokasi/kota atau null",
     "intent": null atau intent yang terdeteksi,
     "sort_by": null atau "rating"/"reviews"/"terbaru",
-    "entity_type": "cafe" atau "facility" atau "collection" atau "all"
+    "entity_type": "cafe" atau "facility" atau "collection" atau "all",
+    "limit": null atau angka 1-100
 }
 
 Contoh:
@@ -98,7 +113,40 @@ Query: "kafe dengan wifi di bandung yang murah buat kerja"
     "location": "bandung",
     "intent": "kerja",
     "sort_by": null,
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
+}
+
+Query: "3 cafe untuk nongkrong"
+{
+    "is_relevant": true,
+    "query_type": "search",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": "nongkrong",
+    "sort_by": null,
+    "entity_type": "cafe",
+    "limit": 3
+}
+
+Query: "5 tempat ngopi murah di jakarta"
+{
+    "is_relevant": true,
+    "query_type": "search",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": "murah",
+    "location": "jakarta",
+    "intent": null,
+    "sort_by": null,
+    "entity_type": "cafe",
+    "limit": 5
 }
 
 Query: "hello world"
@@ -112,7 +160,8 @@ Query: "hello world"
     "location": null,
     "intent": null,
     "sort_by": null,
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
 }
 
 Query: "siapa presiden indonesia"
@@ -127,7 +176,8 @@ Query: "siapa presiden indonesia"
     "location": null,
     "intent": null,
     "sort_by": null,
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
 }
 
 Query: "kamu siapa?"
@@ -142,7 +192,8 @@ Query: "kamu siapa?"
     "location": null,
     "intent": null,
     "sort_by": null,
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
 }
 
 Query: "halo"
@@ -157,7 +208,24 @@ Query: "halo"
     "location": null,
     "intent": null,
     "sort_by": null,
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
+}
+
+Query: "siapa yang buat aplikasi ini"
+{
+    "is_relevant": false,
+    "query_type": "creator",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": null,
+    "sort_by": null,
+    "entity_type": "cafe",
+    "limit": null
 }
 
 Query: "tempat nongkrong rating tinggi"
@@ -170,7 +238,8 @@ Query: "tempat nongkrong rating tinggi"
     "location": null,
     "intent": "nongkrong",
     "sort_by": "rating",
-    "entity_type": "cafe"
+    "entity_type": "cafe",
+    "limit": null
 }
 
 Query: "collection cafe untuk korporat"
@@ -183,7 +252,8 @@ Query: "collection cafe untuk korporat"
     "location": null,
     "intent": "meeting",
     "sort_by": null,
-    "entity_type": "collection"
+    "entity_type": "collection",
+    "limit": null
 }
 
 Query: "koleksi kafe romantis"
@@ -196,7 +266,8 @@ Query: "koleksi kafe romantis"
     "location": null,
     "intent": "kencan",
     "sort_by": null,
-    "entity_type": "collection"
+    "entity_type": "collection",
+    "limit": null
 }"""
 
     def __init__(self):
@@ -289,6 +360,11 @@ Query: "koleksi kafe romantis"
         page_size: int = 20
     ) -> Dict[str, Any]:
         """Search cafes based on parsed query"""
+        # Use limit from parsed query if available
+        if parsed.limit is not None and parsed.limit > 0:
+            page_size = min(parsed.limit, 100)  # Cap at 100
+            page = 1  # Reset to first page when limit is specified
+
         query = db.query(Cafe)
 
         # Apply text search
@@ -384,6 +460,11 @@ Query: "koleksi kafe romantis"
         page_size: int = 20
     ) -> Dict[str, Any]:
         """Search facilities based on parsed query"""
+        # Use limit from parsed query if available
+        if parsed.limit is not None and parsed.limit > 0:
+            page_size = min(parsed.limit, 100)
+            page = 1
+
         query = db.query(Facility)
 
         if parsed.search_text:
@@ -425,6 +506,11 @@ Query: "koleksi kafe romantis"
         page_size: int = 20
     ) -> Dict[str, Any]:
         """Search collections based on parsed query"""
+        # Use limit from parsed query if available
+        if parsed.limit is not None and parsed.limit > 0:
+            page_size = min(parsed.limit, 100)
+            page = 1
+
         query = db.query(Collection).filter(Collection.visibility == 'public')
 
         # Build search conditions
