@@ -74,7 +74,7 @@ class ParseQueryResponse(BaseModel):
     parsed: ParsedQuery
 
 
-@router.post("/", response_model=NLSearchResponse)
+@router.post("/")
 def natural_language_search(
     request: NLSearchRequest,
     db: Session = Depends(get_db)
@@ -95,10 +95,10 @@ def natural_language_search(
     - Rating requirements
     - Intent (kerja, nongkrong, meeting, etc.)
     """
-    if not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
         )
 
     result = nl_search_service.search_all(
@@ -107,6 +107,28 @@ def natural_language_search(
         page=request.page,
         page_size=request.page_size
     )
+
+    # Check query type and respond accordingly
+    query_type = result["parsed_query"].get("query_type", "search")
+
+    if query_type == "identity":
+        return {
+            "query": request.query,
+            "message": "Gw adalah asisten pencari cafe terbaik! 🏪☕ Tanya gw soal cafe, nongkrong, atau tempat ngopi aja ya!",
+            "type": "identity"
+        }
+    elif query_type == "greeting":
+        return {
+            "query": request.query,
+            "message": "Halo juga! 👋 Mau cari cafe apa nih? Kasih tau aja, misal: 'cafe wifi murah di Jakarta'",
+            "type": "greeting"
+        }
+    elif not result["parsed_query"].get("is_relevant", True):
+        return {
+            "query": request.query,
+            "message": "Apasih anjing gaje 😂 Ke gw bahas cafe aja ya!",
+            "type": "irrelevant"
+        }
 
     # Transform results to response format
     search_results = SearchResults()
@@ -176,13 +198,34 @@ def search_cafes_nl(
     - "tempat kerja murah di bandung"
     - "cafe rating 4 ke atas"
     """
-    if not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
         )
 
     parsed = nl_search_service.parse_query(q)
+
+    # Check query type and respond accordingly
+    if parsed.query_type == "identity":
+        return {
+            "query": q,
+            "message": "Gw adalah asisten pencari cafe terbaik! 🏪☕ Tanya gw soal cafe, nongkrong, atau tempat ngopi aja ya!",
+            "type": "identity"
+        }
+    elif parsed.query_type == "greeting":
+        return {
+            "query": q,
+            "message": "Halo juga! 👋 Mau cari cafe apa nih? Kasih tau aja, misal: 'cafe wifi murah di Jakarta'",
+            "type": "greeting"
+        }
+    elif not parsed.is_relevant:
+        return {
+            "query": q,
+            "message": "Apasih anjing gaje 😂 Ke gw bahas cafe aja ya!",
+            "type": "irrelevant"
+        }
+
     result = nl_search_service.search_cafes(db, parsed, page, page_size)
 
     return {

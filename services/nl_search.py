@@ -10,6 +10,8 @@ import re
 
 class ParsedQuery(BaseModel):
     """Structured query parsed from natural language"""
+    is_relevant: bool = True  # False jika query tidak relevan dengan cafe
+    query_type: str = "search"  # "search", "identity", "greeting", "irrelevant"
     search_text: Optional[str] = None
     facilities: List[str] = []
     min_rating: Optional[float] = None
@@ -61,8 +63,18 @@ Entity types:
 - "collection": mencari koleksi/kurasi
 - "all": mencari semua
 
+PENTING tentang query_type:
+- "search": query mencari cafe/collection/facility (default)
+- "identity": user bertanya tentang siapa kamu/bot ini (contoh: "kamu siapa?", "siapa kamu", "lu siapa", "what are you")
+- "greeting": user menyapa (contoh: "halo", "hi", "selamat pagi")
+- "irrelevant": query tidak relevan dengan cafe sama sekali (contoh: "siapa presiden", "apa itu python", "cuaca hari ini")
+
+Jika query_type bukan "search", set is_relevant = false.
+
 Respond dalam format JSON SAJA tanpa markdown code block:
 {
+    "is_relevant": true atau false,
+    "query_type": "search" atau "identity" atau "greeting" atau "irrelevant",
     "search_text": "kata kunci untuk full-text search atau null",
     "facilities": ["slug-facility-1", "slug-facility-2"],
     "min_rating": null atau angka 0-5,
@@ -77,6 +89,7 @@ Respond dalam format JSON SAJA tanpa markdown code block:
 Contoh:
 Query: "kafe dengan wifi di bandung yang murah buat kerja"
 {
+    "is_relevant": true,
     "search_text": null,
     "facilities": ["wifi", "power-outlet"],
     "min_rating": null,
@@ -84,6 +97,65 @@ Query: "kafe dengan wifi di bandung yang murah buat kerja"
     "price_category": "murah",
     "location": "bandung",
     "intent": "kerja",
+    "sort_by": null,
+    "entity_type": "cafe"
+}
+
+Query: "hello world"
+{
+    "is_relevant": false,
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": null,
+    "sort_by": null,
+    "entity_type": "cafe"
+}
+
+Query: "siapa presiden indonesia"
+{
+    "is_relevant": false,
+    "query_type": "irrelevant",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": null,
+    "sort_by": null,
+    "entity_type": "cafe"
+}
+
+Query: "kamu siapa?"
+{
+    "is_relevant": false,
+    "query_type": "identity",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": null,
+    "sort_by": null,
+    "entity_type": "cafe"
+}
+
+Query: "halo"
+{
+    "is_relevant": false,
+    "query_type": "greeting",
+    "search_text": null,
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": null,
     "sort_by": null,
     "entity_type": "cafe"
 }
@@ -99,6 +171,32 @@ Query: "tempat nongkrong rating tinggi"
     "intent": "nongkrong",
     "sort_by": "rating",
     "entity_type": "cafe"
+}
+
+Query: "collection cafe untuk korporat"
+{
+    "search_text": "korporat",
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": "meeting",
+    "sort_by": null,
+    "entity_type": "collection"
+}
+
+Query: "koleksi kafe romantis"
+{
+    "search_text": "romantis",
+    "facilities": [],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": "kencan",
+    "sort_by": null,
+    "entity_type": "collection"
 }"""
 
     def __init__(self):
@@ -310,6 +408,15 @@ Query: "tempat nongkrong rating tinggi"
             "parsed_query": parsed.model_dump()
         }
 
+    INTENT_KEYWORDS = {
+        "kerja": ["wfh", "work", "kerja", "remote", "coworking", "produktif"],
+        "meeting": ["meeting", "corporate", "korporat", "bisnis", "premium", "wfh", "work"],
+        "nongkrong": ["hangout", "nongkrong", "santai", "chill", "casual"],
+        "foto": ["instagram", "aesthetic", "foto", "instagrammable", "spot"],
+        "belajar": ["study", "belajar", "quiet", "tenang", "wfh"],
+        "kencan": ["romantic", "date", "kencan", "romantis", "couple"],
+    }
+
     def search_collections(
         self,
         db: Session,
@@ -320,14 +427,24 @@ Query: "tempat nongkrong rating tinggi"
         """Search collections based on parsed query"""
         query = db.query(Collection).filter(Collection.visibility == 'public')
 
+        # Build search conditions
+        search_conditions = []
+
+        # Add search_text condition
         if parsed.search_text:
             search_term = f"%{parsed.search_text}%"
-            query = query.filter(
-                or_(
-                    Collection.name.ilike(search_term),
-                    Collection.description.ilike(search_term)
-                )
-            )
+            search_conditions.append(Collection.name.ilike(search_term))
+            search_conditions.append(Collection.description.ilike(search_term))
+
+        # Add intent-based keywords
+        if parsed.intent and parsed.intent in self.INTENT_KEYWORDS:
+            for keyword in self.INTENT_KEYWORDS[parsed.intent]:
+                search_conditions.append(Collection.name.ilike(f"%{keyword}%"))
+                search_conditions.append(Collection.description.ilike(f"%{keyword}%"))
+
+        # Apply OR conditions if any
+        if search_conditions:
+            query = query.filter(or_(*search_conditions))
 
         total = query.count()
         offset = (page - 1) * page_size
