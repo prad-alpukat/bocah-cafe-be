@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from database import get_db
 from services.nl_search import nl_search_service, ParsedQuery
@@ -9,6 +11,7 @@ from schemas import CafeResponse, FacilityResponse, CollectionResponse, Paginati
 from config import settings
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class NLSearchRequest(BaseModel):
@@ -75,8 +78,10 @@ class ParseQueryResponse(BaseModel):
 
 
 @router.post("/")
+@limiter.limit("30/minute")
 def natural_language_search(
-    request: NLSearchRequest,
+    request: Request,
+    body: NLSearchRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -103,9 +108,9 @@ def natural_language_search(
 
     result = nl_search_service.search_all(
         db=db,
-        query_text=request.query,
-        page=request.page,
-        page_size=request.page_size
+        query_text=body.query,
+        page=body.page,
+        page_size=body.page_size
     )
 
     # Check query type and respond accordingly
@@ -113,19 +118,19 @@ def natural_language_search(
 
     if query_type == "identity":
         return {
-            "query": request.query,
+            "query": body.query,
             "message": "Gw adalah asisten pencari cafe terbaik! 🏪☕ Tanya gw soal cafe, nongkrong, atau tempat ngopi aja ya!",
             "type": "identity"
         }
     elif query_type == "greeting":
         return {
-            "query": request.query,
+            "query": body.query,
             "message": "Halo juga! 👋 Mau cari cafe apa nih? Kasih tau aja, misal: 'cafe wifi murah di Jakarta'",
             "type": "greeting"
         }
     elif not result["parsed_query"].get("is_relevant", True):
         return {
-            "query": request.query,
+            "query": body.query,
             "message": "Apasih anjing gaje 😂 Ke gw bahas cafe aja ya!",
             "type": "irrelevant"
         }
@@ -177,14 +182,16 @@ def natural_language_search(
         )
 
     return NLSearchResponse(
-        query=request.query,
+        query=body.query,
         parsed_query=result["parsed_query"],
         results=search_results
     )
 
 
 @router.get("/cafes")
+@limiter.limit("30/minute")
 def search_cafes_nl(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=500, description="Natural language search query"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -242,23 +249,25 @@ def search_cafes_nl(
 
 
 @router.post("/parse")
+@limiter.limit("30/minute")
 def parse_query_only(
-    request: NLSearchRequest,
+    request: Request,
+    body: NLSearchRequest,
 ):
     """
     Parse a natural language query without executing search.
     Useful for debugging or understanding how queries are interpreted.
     """
-    if not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
         )
 
-    parsed = nl_search_service.parse_query(request.query)
+    parsed = nl_search_service.parse_query(body.query)
 
     return ParseQueryResponse(
-        query=request.query,
+        query=body.query,
         parsed=parsed
     )
 
