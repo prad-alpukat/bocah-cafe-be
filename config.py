@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: str = "firebase-key.json"
     FIREBASE_CREDENTIALS: Optional[str] = None  # JSON string for cloud deployment
 
+    # AI Configuration
+    GEMINI_API_KEY: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+
     class Config:
         env_file = ".env"
 

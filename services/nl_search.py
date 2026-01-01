@@ -1,0 +1,373 @@
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+from config import settings
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, case
+from models import Cafe, Facility, Collection
+import json
+import re
+
+
+class ParsedQuery(BaseModel):
+    """Structured query parsed from natural language"""
+    search_text: Optional[str] = None
+    facilities: List[str] = []
+    min_rating: Optional[float] = None
+    max_rating: Optional[float] = None
+    price_category: Optional[str] = None  # "murah", "sedang", "mahal"
+    location: Optional[str] = None
+    intent: Optional[str] = None  # "kerja", "nongkrong", "meeting", "foto", etc.
+    sort_by: Optional[str] = None  # "rating", "reviews", "terbaru"
+    entity_type: str = "cafe"  # "cafe", "facility", "collection", "all"
+
+
+class NLSearchService:
+    """Natural Language Search Service using Groq (primary) or Gemini (fallback)"""
+
+    SYSTEM_PROMPT = """Kamu adalah parser query pencarian untuk aplikasi direktori kafe.
+Tugas kamu adalah mengekstrak informasi terstruktur dari query natural language user.
+
+Fasilitas yang tersedia (gunakan slug):
+- wifi: WiFi gratis
+- ac: AC / pendingin ruangan
+- mushola: Mushola / tempat ibadah
+- toilet: Toilet
+- parking: Parkir
+- outdoor: Area outdoor
+- indoor: Area indoor
+- smoking-area: Smoking area
+- meeting-room: Ruang meeting
+- power-outlet: Stop kontak / colokan
+- pet-friendly: Pet friendly
+- live-music: Live music
+- board-games: Board games
+
+Kategori harga:
+- "murah": range_price mengandung < 30.000
+- "sedang": range_price mengandung 30.000 - 70.000
+- "mahal": range_price mengandung > 70.000
+
+Intent/tujuan umum:
+- "kerja": user ingin bekerja/WFH (biasanya butuh wifi, power outlet)
+- "nongkrong": user ingin hangout santai
+- "meeting": user ingin meeting (biasanya butuh meeting room, wifi)
+- "foto": user ingin tempat aesthetic untuk foto
+- "belajar": user ingin belajar (mirip kerja)
+- "kencan": user ingin date/romantic
+
+Entity types:
+- "cafe": mencari kafe
+- "facility": mencari fasilitas
+- "collection": mencari koleksi/kurasi
+- "all": mencari semua
+
+Respond dalam format JSON SAJA tanpa markdown code block:
+{
+    "search_text": "kata kunci untuk full-text search atau null",
+    "facilities": ["slug-facility-1", "slug-facility-2"],
+    "min_rating": null atau angka 0-5,
+    "max_rating": null atau angka 0-5,
+    "price_category": null atau "murah"/"sedang"/"mahal",
+    "location": "nama lokasi/kota atau null",
+    "intent": null atau intent yang terdeteksi,
+    "sort_by": null atau "rating"/"reviews"/"terbaru",
+    "entity_type": "cafe" atau "facility" atau "collection" atau "all"
+}
+
+Contoh:
+Query: "kafe dengan wifi di bandung yang murah buat kerja"
+{
+    "search_text": null,
+    "facilities": ["wifi", "power-outlet"],
+    "min_rating": null,
+    "max_rating": null,
+    "price_category": "murah",
+    "location": "bandung",
+    "intent": "kerja",
+    "sort_by": null,
+    "entity_type": "cafe"
+}
+
+Query: "tempat nongkrong rating tinggi"
+{
+    "search_text": null,
+    "facilities": [],
+    "min_rating": 4.0,
+    "max_rating": null,
+    "price_category": null,
+    "location": null,
+    "intent": "nongkrong",
+    "sort_by": "rating",
+    "entity_type": "cafe"
+}"""
+
+    def __init__(self):
+        self.groq_client = None
+        self.gemini_model = None
+        self.provider = None
+
+        # Try Groq first (primary)
+        if settings.GROQ_API_KEY:
+            try:
+                from groq import Groq
+                self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
+                self.provider = "groq"
+            except Exception as e:
+                print(f"Failed to initialize Groq: {e}")
+
+        # Fallback to Gemini
+        if not self.groq_client and settings.GEMINI_API_KEY:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=settings.GEMINI_API_KEY)
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+                self.provider = "gemini"
+            except Exception as e:
+                print(f"Failed to initialize Gemini: {e}")
+
+    def _parse_with_groq(self, query: str) -> ParsedQuery:
+        """Parse query using Groq API"""
+        response = self.groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",  # Fast and free
+            messages=[
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": f'Query: "{query}"'}
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+
+        response_text = response.choices[0].message.content.strip()
+        # Remove markdown code blocks if present
+        if response_text.startswith("```"):
+            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
+            response_text = re.sub(r'\n?```$', '', response_text)
+
+        parsed = json.loads(response_text)
+        return ParsedQuery(**parsed)
+
+    def _parse_with_gemini(self, query: str) -> ParsedQuery:
+        """Parse query using Gemini API"""
+        import google.generativeai as genai
+
+        response = self.gemini_model.generate_content(
+            f"{self.SYSTEM_PROMPT}\n\nQuery: \"{query}\"",
+            generation_config=genai.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=500,
+            )
+        )
+
+        response_text = response.text.strip()
+        if response_text.startswith("```"):
+            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
+            response_text = re.sub(r'\n?```$', '', response_text)
+
+        parsed = json.loads(response_text)
+        return ParsedQuery(**parsed)
+
+    def parse_query(self, query: str) -> ParsedQuery:
+        """Parse natural language query into structured filters"""
+        if not self.groq_client and not self.gemini_model:
+            # Fallback: return query as search_text if no AI configured
+            return ParsedQuery(search_text=query)
+
+        try:
+            if self.groq_client:
+                return self._parse_with_groq(query)
+            elif self.gemini_model:
+                return self._parse_with_gemini(query)
+        except Exception as e:
+            print(f"AI parse error ({self.provider}): {e}")
+            return ParsedQuery(search_text=query)
+
+        return ParsedQuery(search_text=query)
+
+    def search_cafes(
+        self,
+        db: Session,
+        parsed: ParsedQuery,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Dict[str, Any]:
+        """Search cafes based on parsed query"""
+        query = db.query(Cafe)
+
+        # Apply text search
+        if parsed.search_text:
+            search_term = f"%{parsed.search_text}%"
+            query = query.filter(
+                or_(
+                    Cafe.nama.ilike(search_term),
+                    Cafe.alamat_lengkap.ilike(search_term)
+                )
+            )
+
+        # Apply location filter
+        if parsed.location:
+            query = query.filter(Cafe.alamat_lengkap.ilike(f"%{parsed.location}%"))
+
+        # Apply rating filters
+        if parsed.min_rating is not None:
+            query = query.filter(Cafe.rating >= parsed.min_rating)
+        if parsed.max_rating is not None:
+            query = query.filter(Cafe.rating <= parsed.max_rating)
+
+        # Apply price category filter
+        if parsed.price_category:
+            if parsed.price_category == "murah":
+                query = query.filter(
+                    or_(
+                        Cafe.range_price.ilike("%murah%"),
+                        Cafe.range_price.ilike("%10.000%"),
+                        Cafe.range_price.ilike("%15.000%"),
+                        Cafe.range_price.ilike("%20.000%"),
+                        Cafe.range_price.ilike("%25.000%"),
+                    )
+                )
+            elif parsed.price_category == "mahal":
+                query = query.filter(
+                    or_(
+                        Cafe.range_price.ilike("%mahal%"),
+                        Cafe.range_price.ilike("%100.000%"),
+                        Cafe.range_price.ilike("%150.000%"),
+                        Cafe.range_price.ilike("%200.000%"),
+                    )
+                )
+
+        # Apply facility filters
+        if parsed.facilities:
+            for facility_slug in parsed.facilities:
+                query = query.filter(
+                    Cafe.facilities.any(Facility.slug == facility_slug)
+                )
+
+        # Apply sorting (MySQL compatible - use CASE for NULLS LAST)
+        if parsed.sort_by == "rating":
+            query = query.order_by(
+                case((Cafe.rating.is_(None), 1), else_=0),
+                Cafe.rating.desc()
+            )
+        elif parsed.sort_by == "reviews":
+            query = query.order_by(
+                case((Cafe.count_google_review.is_(None), 1), else_=0),
+                Cafe.count_google_review.desc()
+            )
+        elif parsed.sort_by == "terbaru":
+            query = query.order_by(Cafe.created_at.desc())
+        else:
+            # Default: sort by rating
+            query = query.order_by(
+                case((Cafe.rating.is_(None), 1), else_=0),
+                Cafe.rating.desc()
+            )
+
+        # Get total count
+        total = query.count()
+
+        # Apply pagination
+        offset = (page - 1) * page_size
+        cafes = query.offset(offset).limit(page_size).all()
+
+        return {
+            "items": cafes,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+            "parsed_query": parsed.model_dump()
+        }
+
+    def search_facilities(
+        self,
+        db: Session,
+        parsed: ParsedQuery,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Dict[str, Any]:
+        """Search facilities based on parsed query"""
+        query = db.query(Facility)
+
+        if parsed.search_text:
+            search_term = f"%{parsed.search_text}%"
+            query = query.filter(
+                or_(
+                    Facility.name.ilike(search_term),
+                    Facility.description.ilike(search_term)
+                )
+            )
+
+        total = query.count()
+        offset = (page - 1) * page_size
+        facilities = query.offset(offset).limit(page_size).all()
+
+        return {
+            "items": facilities,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+            "parsed_query": parsed.model_dump()
+        }
+
+    def search_collections(
+        self,
+        db: Session,
+        parsed: ParsedQuery,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Dict[str, Any]:
+        """Search collections based on parsed query"""
+        query = db.query(Collection).filter(Collection.visibility == 'public')
+
+        if parsed.search_text:
+            search_term = f"%{parsed.search_text}%"
+            query = query.filter(
+                or_(
+                    Collection.name.ilike(search_term),
+                    Collection.description.ilike(search_term)
+                )
+            )
+
+        total = query.count()
+        offset = (page - 1) * page_size
+        collections = query.offset(offset).limit(page_size).all()
+
+        return {
+            "items": collections,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+            "parsed_query": parsed.model_dump()
+        }
+
+    def search_all(
+        self,
+        db: Session,
+        query_text: str,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Dict[str, Any]:
+        """Universal search across all entities"""
+        parsed = self.parse_query(query_text)
+
+        results = {
+            "parsed_query": parsed.model_dump(),
+            "results": {}
+        }
+
+        if parsed.entity_type in ["cafe", "all"]:
+            results["results"]["cafes"] = self.search_cafes(db, parsed, page, page_size)
+
+        if parsed.entity_type in ["facility", "all"]:
+            results["results"]["facilities"] = self.search_facilities(db, parsed, page, page_size)
+
+        if parsed.entity_type in ["collection", "all"]:
+            results["results"]["collections"] = self.search_collections(db, parsed, page, page_size)
+
+        return results
+
+
+# Singleton instance
+nl_search_service = NLSearchService()
