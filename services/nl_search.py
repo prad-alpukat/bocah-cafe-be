@@ -6,6 +6,8 @@ from sqlalchemy import or_, case
 from models import Cafe, Facility, Collection
 import json
 import re
+import random
+import threading
 
 
 class ParsedQuery(BaseModel):
@@ -24,8 +26,58 @@ class ParsedQuery(BaseModel):
     limit: Optional[int] = None  # jumlah hasil yang diminta user (e.g. "3 cafe" -> 3)
 
 
+class GroqLoadBalancer:
+    """Load balancer for multiple Groq API keys"""
+
+    def __init__(self, api_keys: List[str]):
+        from groq import Groq
+        self.clients = [Groq(api_key=key.strip()) for key in api_keys if key.strip()]
+        self.current_index = 0
+        self.lock = threading.Lock()
+        self.failed_clients = set()  # Track temporarily failed clients
+
+    def get_client(self):
+        """Get next available client using round-robin"""
+        if not self.clients:
+            return None
+
+        with self.lock:
+            # Try to find a working client
+            attempts = len(self.clients)
+            while attempts > 0:
+                client = self.clients[self.current_index]
+                self.current_index = (self.current_index + 1) % len(self.clients)
+
+                # Skip if this client recently failed
+                if id(client) not in self.failed_clients:
+                    return client
+                attempts -= 1
+
+            # All clients failed, reset and try anyway
+            self.failed_clients.clear()
+            return self.clients[0]
+
+    def mark_failed(self, client):
+        """Mark a client as temporarily failed"""
+        with self.lock:
+            self.failed_clients.add(id(client))
+
+    def mark_success(self, client):
+        """Mark a client as working again"""
+        with self.lock:
+            self.failed_clients.discard(id(client))
+
+    @property
+    def is_available(self):
+        return len(self.clients) > 0
+
+    @property
+    def client_count(self):
+        return len(self.clients)
+
+
 class NLSearchService:
-    """Natural Language Search Service using Groq (primary) or Gemini (fallback)"""
+    """Natural Language Search Service using Groq with load balancing"""
 
     SYSTEM_PROMPT = """Kamu adalah parser query pencarian untuk aplikasi direktori kafe.
 Tugas kamu adalah mengekstrak informasi terstruktur dari query natural language user.
@@ -271,18 +323,19 @@ Query: "koleksi kafe romantis"
 }"""
 
     def __init__(self):
-        self.groq_client = None
+        self.load_balancer = None
 
-        if settings.GROQ_API_KEY:
+        if settings.GROQ_API_KEYS:
             try:
-                from groq import Groq
-                self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
+                api_keys = settings.GROQ_API_KEYS.split(",")
+                self.load_balancer = GroqLoadBalancer(api_keys)
+                print(f"Initialized Groq load balancer with {self.load_balancer.client_count} clients")
             except Exception as e:
-                print(f"Failed to initialize Groq: {e}")
+                print(f"Failed to initialize Groq load balancer: {e}")
 
-    def _parse_with_groq(self, query: str) -> ParsedQuery:
+    def _parse_with_groq(self, client, query: str) -> ParsedQuery:
         """Parse query using Groq API"""
-        response = self.groq_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="llama-3.1-8b-instant",  # Fast and free
             messages=[
                 {"role": "system", "content": self.SYSTEM_PROMPT},
@@ -302,16 +355,28 @@ Query: "koleksi kafe romantis"
         return ParsedQuery(**parsed)
 
     def parse_query(self, query: str) -> ParsedQuery:
-        """Parse natural language query into structured filters"""
-        if not self.groq_client:
+        """Parse natural language query into structured filters with load balancing"""
+        if not self.load_balancer or not self.load_balancer.is_available:
             # Fallback: return query as search_text if no Groq configured
             return ParsedQuery(search_text=query)
 
-        try:
-            return self._parse_with_groq(query)
-        except Exception as e:
-            print(f"Groq parse error: {e}")
-            return ParsedQuery(search_text=query)
+        # Try multiple clients if one fails
+        max_retries = min(3, self.load_balancer.client_count)
+        last_error = None
+
+        for _ in range(max_retries):
+            client = self.load_balancer.get_client()
+            try:
+                result = self._parse_with_groq(client, query)
+                self.load_balancer.mark_success(client)
+                return result
+            except Exception as e:
+                last_error = e
+                self.load_balancer.mark_failed(client)
+                print(f"Groq client failed, trying next: {e}")
+
+        print(f"All Groq clients failed: {last_error}")
+        return ParsedQuery(search_text=query)
 
     def search_cafes(
         self,

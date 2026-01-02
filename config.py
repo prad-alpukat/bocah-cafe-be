@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     FIREBASE_CREDENTIALS: Optional[str] = None  # JSON string for cloud deployment
 
     # AI Configuration
-    GROQ_API_KEY: Optional[str] = None
+    # Single key or comma-separated multiple keys for load balancing
+    # Example: "key1,key2,key3"
+    GROQ_API_KEYS: Optional[str] = None
 
     class Config:
         env_file = ".env"
