@@ -272,27 +272,13 @@ Query: "koleksi kafe romantis"
 
     def __init__(self):
         self.groq_client = None
-        self.gemini_model = None
-        self.provider = None
 
-        # Try Groq first (primary)
         if settings.GROQ_API_KEY:
             try:
                 from groq import Groq
                 self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
-                self.provider = "groq"
             except Exception as e:
                 print(f"Failed to initialize Groq: {e}")
-
-        # Fallback to Gemini
-        if not self.groq_client and settings.GEMINI_API_KEY:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
-                self.provider = "gemini"
-            except Exception as e:
-                print(f"Failed to initialize Gemini: {e}")
 
     def _parse_with_groq(self, query: str) -> ParsedQuery:
         """Parse query using Groq API"""
@@ -315,42 +301,17 @@ Query: "koleksi kafe romantis"
         parsed = json.loads(response_text)
         return ParsedQuery(**parsed)
 
-    def _parse_with_gemini(self, query: str) -> ParsedQuery:
-        """Parse query using Gemini API"""
-        import google.generativeai as genai
-
-        response = self.gemini_model.generate_content(
-            f"{self.SYSTEM_PROMPT}\n\nQuery: \"{query}\"",
-            generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=500,
-            )
-        )
-
-        response_text = response.text.strip()
-        if response_text.startswith("```"):
-            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
-            response_text = re.sub(r'\n?```$', '', response_text)
-
-        parsed = json.loads(response_text)
-        return ParsedQuery(**parsed)
-
     def parse_query(self, query: str) -> ParsedQuery:
         """Parse natural language query into structured filters"""
-        if not self.groq_client and not self.gemini_model:
-            # Fallback: return query as search_text if no AI configured
+        if not self.groq_client:
+            # Fallback: return query as search_text if no Groq configured
             return ParsedQuery(search_text=query)
 
         try:
-            if self.groq_client:
-                return self._parse_with_groq(query)
-            elif self.gemini_model:
-                return self._parse_with_gemini(query)
+            return self._parse_with_groq(query)
         except Exception as e:
-            print(f"AI parse error ({self.provider}): {e}")
+            print(f"Groq parse error: {e}")
             return ParsedQuery(search_text=query)
-
-        return ParsedQuery(search_text=query)
 
     def search_cafes(
         self,

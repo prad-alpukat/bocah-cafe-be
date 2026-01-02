@@ -100,10 +100,10 @@ def natural_language_search(
     - Rating requirements
     - Intent (kerja, nongkrong, meeting, etc.)
     """
-    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY."
         )
 
     result = nl_search_service.search_all(
@@ -211,10 +211,10 @@ def search_cafes_nl(
     - "tempat kerja murah di bandung"
     - "cafe rating 4 ke atas"
     """
-    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY."
         )
 
     parsed = nl_search_service.parse_query(q)
@@ -270,10 +270,10 @@ def parse_query_only(
     Parse a natural language query without executing search.
     Useful for debugging or understanding how queries are interpreted.
     """
-    if not settings.GROQ_API_KEY and not settings.GEMINI_API_KEY:
+    if not settings.GROQ_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Natural language search is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
+            detail="Natural language search is not configured. Please set GROQ_API_KEY."
         )
 
     parsed = nl_search_service.parse_query(body.query)

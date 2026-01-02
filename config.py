@@ -16,10 +16,10 @@ class Settings(BaseSettings):
     FIREBASE_CREDENTIALS: Optional[str] = None  # JSON string for cloud deployment
 
     # AI Configuration
-    GEMINI_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
