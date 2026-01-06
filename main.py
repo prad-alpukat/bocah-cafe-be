@@ -5,7 +5,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from database import engine, Base
-from routers import cafe, auth, upload, admin, role, facility, collection, search
+from routers import cafe, auth, upload, admin, role, facility, collection, search, permission
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -50,6 +50,7 @@ app.include_router(facility.router, prefix="/api/facilities", tags=["Facilities"
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin Management"])
 app.include_router(role.router, prefix="/api/roles", tags=["Role Management"])
+app.include_router(permission.router, prefix="/api/permissions", tags=["Permission Management"])
 app.include_router(collection.router, prefix="/api/collections", tags=["Collections"])
 app.include_router(search.router, prefix="/api/search", tags=["Natural Language Search"])
 

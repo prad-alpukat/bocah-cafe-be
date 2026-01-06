@@ -7,6 +7,14 @@ import uuid
 def generate_uuid():
     return str(uuid.uuid4())
 
+# Association table for many-to-many relationship between Role and Permission
+role_permissions = Table(
+    'role_permissions',
+    Base.metadata,
+    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    Column('permission_id', String(36), ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
+)
+
 # Association table for many-to-many relationship between Cafe and Facility
 cafe_facilities = Table(
     'cafe_facilities',
@@ -57,6 +65,21 @@ class Cafe(Base):
     facilities = relationship("Facility", secondary=cafe_facilities, back_populates="cafes")
     collections = relationship("Collection", secondary=collection_cafes, back_populates="cafes")
 
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)  # e.g., "Create Cafe"
+    slug = Column(String(100), unique=True, index=True, nullable=False)  # e.g., "cafe:create"
+    resource = Column(String(50), index=True, nullable=False)  # e.g., "cafe", "facility", "admin"
+    action = Column(String(50), nullable=False)  # e.g., "create", "read", "update", "delete"
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
+
+
 class Role(Base):
     __tablename__ = "roles"
 
@@ -68,8 +91,9 @@ class Role(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship
+    # Relationships
     admins = relationship("Admin", back_populates="role")
+    permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")
 
 class Admin(Base):
     __tablename__ = "admins"

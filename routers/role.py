@@ -1,17 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from math import ceil
 from database import get_db
-from models import Role, Admin
+from models import Role, Admin, Permission
 from schemas import (
     RoleCreate,
     RoleUpdate,
     RoleResponse,
+    RoleWithPermissionsResponse,
+    RolePermissionsUpdate,
+    RolePermissionsSlugsUpdate,
+    PermissionResponse,
     PaginatedResponse,
     ApiResponse
 )
-from auth_utils import get_superadmin
+from auth_utils import get_superadmin, require_permission
 
 router = APIRouter()
 
@@ -227,3 +231,224 @@ async def get_role_by_slug(
             detail="Role not found"
         )
     return {"data": role}
+
+
+# ============== Permission Management Endpoints ==============
+
+@router.get("/{role_id}/permissions", response_model=ApiResponse[RoleWithPermissionsResponse])
+async def get_role_permissions(
+    role_id: str,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_permission("role:manage_permissions"))
+):
+    """
+    Get role with all its permissions.
+    Requires role:manage_permissions permission.
+    """
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+    return {"data": role}
+
+
+@router.put("/{role_id}/permissions", response_model=ApiResponse[RoleWithPermissionsResponse])
+async def update_role_permissions(
+    role_id: str,
+    permission_update: RolePermissionsUpdate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_permission("role:manage_permissions"))
+):
+    """
+    Replace all permissions for a role.
+    Requires role:manage_permissions permission.
+
+    Note: Superadmin role permissions cannot be modified (they have all permissions by default).
+    """
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    # Prevent modifying superadmin permissions
+    if role.slug == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify superadmin permissions. Superadmin has all permissions by default."
+        )
+
+    # Get permissions by IDs
+    permissions = db.query(Permission).filter(
+        Permission.id.in_(permission_update.permission_ids)
+    ).all()
+
+    if len(permissions) != len(permission_update.permission_ids):
+        found_ids = {p.id for p in permissions}
+        missing_ids = set(permission_update.permission_ids) - found_ids
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Some permissions not found: {list(missing_ids)}"
+        )
+
+    # Replace permissions
+    role.permissions = permissions
+    db.commit()
+    db.refresh(role)
+
+    return {
+        "data": role,
+        "message": f"Updated permissions for role '{role.name}'. Total: {len(permissions)} permissions."
+    }
+
+
+@router.put("/{role_id}/permissions/slugs", response_model=ApiResponse[RoleWithPermissionsResponse])
+async def update_role_permissions_by_slugs(
+    role_id: str,
+    permission_update: RolePermissionsSlugsUpdate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_permission("role:manage_permissions"))
+):
+    """
+    Replace all permissions for a role using permission slugs.
+    Requires role:manage_permissions permission.
+
+    Example request body:
+    {
+        "permission_slugs": ["cafe:create", "cafe:update", "cafe:read"]
+    }
+    """
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    # Prevent modifying superadmin permissions
+    if role.slug == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify superadmin permissions. Superadmin has all permissions by default."
+        )
+
+    # Get permissions by slugs
+    permissions = db.query(Permission).filter(
+        Permission.slug.in_(permission_update.permission_slugs)
+    ).all()
+
+    if len(permissions) != len(permission_update.permission_slugs):
+        found_slugs = {p.slug for p in permissions}
+        missing_slugs = set(permission_update.permission_slugs) - found_slugs
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Some permissions not found: {list(missing_slugs)}"
+        )
+
+    # Replace permissions
+    role.permissions = permissions
+    db.commit()
+    db.refresh(role)
+
+    return {
+        "data": role,
+        "message": f"Updated permissions for role '{role.name}'. Total: {len(permissions)} permissions."
+    }
+
+
+@router.post("/{role_id}/permissions/add", response_model=ApiResponse[RoleWithPermissionsResponse])
+async def add_permissions_to_role(
+    role_id: str,
+    permission_update: RolePermissionsSlugsUpdate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_permission("role:manage_permissions"))
+):
+    """
+    Add permissions to a role (without removing existing ones).
+    Requires role:manage_permissions permission.
+    """
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    if role.slug == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify superadmin permissions."
+        )
+
+    # Get permissions to add
+    permissions_to_add = db.query(Permission).filter(
+        Permission.slug.in_(permission_update.permission_slugs)
+    ).all()
+
+    if len(permissions_to_add) != len(permission_update.permission_slugs):
+        found_slugs = {p.slug for p in permissions_to_add}
+        missing_slugs = set(permission_update.permission_slugs) - found_slugs
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Some permissions not found: {list(missing_slugs)}"
+        )
+
+    # Add only new permissions
+    current_slugs = {p.slug for p in role.permissions}
+    added_count = 0
+    for perm in permissions_to_add:
+        if perm.slug not in current_slugs:
+            role.permissions.append(perm)
+            added_count += 1
+
+    db.commit()
+    db.refresh(role)
+
+    return {
+        "data": role,
+        "message": f"Added {added_count} new permission(s) to role '{role.name}'."
+    }
+
+
+@router.post("/{role_id}/permissions/remove", response_model=ApiResponse[RoleWithPermissionsResponse])
+async def remove_permissions_from_role(
+    role_id: str,
+    permission_update: RolePermissionsSlugsUpdate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_permission("role:manage_permissions"))
+):
+    """
+    Remove specific permissions from a role.
+    Requires role:manage_permissions permission.
+    """
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    if role.slug == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify superadmin permissions."
+        )
+
+    # Remove permissions
+    slugs_to_remove = set(permission_update.permission_slugs)
+    removed_count = 0
+    role.permissions = [p for p in role.permissions if p.slug not in slugs_to_remove]
+
+    # Count how many were actually removed
+    removed_count = len(slugs_to_remove)
+
+    db.commit()
+    db.refresh(role)
+
+    return {
+        "data": role,
+        "message": f"Removed permission(s) from role '{role.name}'."
+    }

@@ -11,6 +11,7 @@ Usage:
 
 Available seeders:
     - roles       : System roles (superadmin, admin, writer, viewer)
+    - permissions : Permission definitions and role assignments
     - admins      : Default admin user (admin/password)
     - facilities  : Cafe facilities (wifi, mushola, ac, etc.)
     - cafes       : Sample cafe data (100 cafes)
@@ -25,12 +26,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from database import engine, Base, SessionLocal
-from seeders import RoleSeeder, AdminSeeder, FacilitySeeder, CafeSeeder, CollectionSeeder
+from seeders import RoleSeeder, PermissionSeeder, AdminSeeder, FacilitySeeder, CafeSeeder, CollectionSeeder
 
 
 # Seeder registry - order matters!
 SEEDERS = [
     ("roles", RoleSeeder),
+    ("permissions", PermissionSeeder),
     ("admins", AdminSeeder),
     ("facilities", FacilitySeeder),
     ("cafes", CafeSeeder),

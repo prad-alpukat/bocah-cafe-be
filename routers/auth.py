@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from database import get_db
-from models import Admin, Role
-from schemas import AdminCreate, AdminResponse, Token, LoginRequest, ApiResponse
+from models import Admin, Role, Permission
+from schemas import AdminCreate, AdminResponse, Token, LoginRequest, ApiResponse, MyPermissionsResponse, PermissionResponse
 from auth_utils import get_password_hash, authenticate_admin, create_access_token, get_current_admin
 from config import settings
 
@@ -78,3 +78,41 @@ def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
     Get current admin information
     """
     return {"data": current_admin}
+
+
+@router.get("/me/permissions", response_model=ApiResponse[MyPermissionsResponse])
+def get_current_admin_permissions(
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get current admin's role and permissions.
+    No special permission required - users can always view their own permissions.
+
+    Returns:
+        - role: Basic role information (id, name, slug)
+        - is_superadmin: True if superadmin (has all permissions by default)
+        - permissions: List of assigned permissions (empty for superadmin since they have all)
+    """
+    is_superadmin = current_admin.role.slug == "superadmin"
+
+    if is_superadmin:
+        # Superadmin has all permissions - return all permissions from database
+        all_permissions = db.query(Permission).order_by(Permission.resource, Permission.action).all()
+        permissions = [PermissionResponse.model_validate(p) for p in all_permissions]
+    else:
+        # Regular user - return assigned permissions
+        permissions = [PermissionResponse.model_validate(p) for p in current_admin.role.permissions]
+
+    return {
+        "data": {
+            "role": {
+                "id": current_admin.role.id,
+                "name": current_admin.role.name,
+                "slug": current_admin.role.slug
+            },
+            "is_superadmin": is_superadmin,
+            "permissions": permissions
+        },
+        "message": "Success"
+    }

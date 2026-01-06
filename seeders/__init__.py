@@ -10,6 +10,7 @@ Usage:
 
 from .base_seeder import BaseSeeder
 from .role_seeder import RoleSeeder
+from .permission_seeder import PermissionSeeder
 from .admin_seeder import AdminSeeder
 from .facility_seeder import FacilitySeeder
 from .cafe_seeder import CafeSeeder
@@ -18,6 +19,7 @@ from .collection_seeder import CollectionSeeder
 __all__ = [
     'BaseSeeder',
     'RoleSeeder',
+    'PermissionSeeder',
     'AdminSeeder',
     'FacilitySeeder',
     'CafeSeeder',

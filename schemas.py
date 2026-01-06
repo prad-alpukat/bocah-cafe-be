@@ -270,6 +270,84 @@ class RoleResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Permission Schemas
+class PermissionBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100, description="Permission name (e.g., 'Create Cafe')")
+    slug: str = Field(..., min_length=3, max_length=100, description="Permission slug (e.g., 'cafe:create')")
+    resource: str = Field(..., min_length=2, max_length=50, description="Resource name (e.g., 'cafe', 'admin')")
+    action: str = Field(..., min_length=2, max_length=50, description="Action name (e.g., 'create', 'delete')")
+    description: Optional[str] = Field(None, max_length=500, description="Permission description")
+
+    @field_validator('slug')
+    @classmethod
+    def validate_permission_slug(cls, v: str) -> str:
+        if not re.match(r'^[a-z0-9]+:[a-z0-9_]+$', v):
+            raise ValueError('Permission slug must be in format resource:action (e.g., cafe:create)')
+        return v
+
+
+class PermissionCreate(PermissionBase):
+    pass
+
+
+class PermissionResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    resource: str
+    action: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RoleWithPermissionsResponse(BaseModel):
+    """Role response with permissions included"""
+    id: str
+    name: str
+    slug: str
+    description: Optional[str] = None
+    is_system_role: bool
+    permissions: List[PermissionResponse] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RolePermissionsUpdate(BaseModel):
+    """Request to update role permissions"""
+    permission_ids: List[str] = Field(..., description="List of permission IDs to assign to role")
+
+
+class RolePermissionsSlugsUpdate(BaseModel):
+    """Request to update role permissions using slugs"""
+    permission_slugs: List[str] = Field(..., description="List of permission slugs to assign (e.g., ['cafe:create', 'cafe:update'])")
+
+
+class RoleSummary(BaseModel):
+    """Minimal role info for permission response"""
+    id: str
+    name: str
+    slug: str
+
+    class Config:
+        from_attributes = True
+
+
+class MyPermissionsResponse(BaseModel):
+    """Response for current user's permissions"""
+    role: RoleSummary
+    is_superadmin: bool = Field(default=False, description="True if user is superadmin (has all permissions)")
+    permissions: List[PermissionResponse] = Field(default_factory=list, description="List of assigned permissions")
+
+    class Config:
+        from_attributes = True
+
+
 # Auth Schemas
 class AdminCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
