@@ -3,6 +3,85 @@ from typing import Optional, List, Generic, TypeVar, Literal
 from datetime import datetime
 from math import ceil
 import re
+from urllib.parse import urlparse
+from config import settings
+
+
+def validate_icon_format(icon: Optional[str]) -> Optional[str]:
+    """
+    Validate icon format. Accepts:
+    1. Iconify format: iconify:{icon-set}:{icon-name}
+       Example: iconify:lucide:wifi, iconify:mdi:parking
+    2. PNG URL format: https:// URL from allowed domains
+       Example: https://storage.googleapis.com/bucket/icon.png
+    3. None/empty string
+
+    Rejects:
+    - Raw SVG strings (XSS risk)
+    - URLs from non-allowed domains
+    - Invalid formats
+    """
+    if icon is None or icon.strip() == "":
+        return None
+
+    icon = icon.strip()
+
+    # Check for Iconify format
+    if icon.startswith("iconify:"):
+        # Format: iconify:{set}:{name}
+        parts = icon.split(":")
+        if len(parts) != 3:
+            raise ValueError(
+                "Invalid Iconify format. Use: iconify:{icon-set}:{icon-name} "
+                "(e.g., iconify:lucide:wifi)"
+            )
+        icon_set, icon_name = parts[1], parts[2]
+        if not icon_set or not icon_name:
+            raise ValueError(
+                "Iconify icon-set and icon-name cannot be empty"
+            )
+        # Validate icon set and name characters (alphanumeric, hyphens, underscores)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', icon_set):
+            raise ValueError(f"Invalid icon-set: {icon_set}")
+        if not re.match(r'^[a-zA-Z0-9_-]+$', icon_name):
+            raise ValueError(f"Invalid icon-name: {icon_name}")
+        return icon
+
+    # Check for URL format
+    if icon.startswith("http://") or icon.startswith("https://"):
+        # Must be HTTPS
+        if icon.startswith("http://"):
+            raise ValueError("Icon URL must use HTTPS")
+
+        # Parse URL
+        try:
+            parsed = urlparse(icon)
+        except Exception:
+            raise ValueError("Invalid icon URL format")
+
+        # Check allowed domains
+        allowed_domains = [d.strip() for d in settings.ALLOWED_ICON_DOMAINS.split(",")]
+        if parsed.netloc not in allowed_domains:
+            raise ValueError(
+                f"Icon URL domain not allowed. Allowed domains: {', '.join(allowed_domains)}"
+            )
+
+        # Check file extension (must be PNG)
+        if not parsed.path.lower().endswith('.png'):
+            raise ValueError("Icon URL must point to a PNG file")
+
+        return icon
+
+    # Check for raw SVG (security risk - reject)
+    if icon.startswith("<svg") or icon.startswith("<?xml") or "xmlns" in icon.lower():
+        raise ValueError("Raw SVG is not allowed for security reasons. Use Iconify format or upload PNG.")
+
+    # Invalid format
+    raise ValueError(
+        "Invalid icon format. Use either:\n"
+        "1. Iconify: iconify:{set}:{name} (e.g., iconify:lucide:wifi)\n"
+        "2. PNG URL: https:// URL from allowed storage domain"
+    )
 
 # Generic Response Schemas
 T = TypeVar('T')
@@ -36,7 +115,11 @@ class UploadResponse(BaseModel):
 class FacilityBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100, description="Nama fasilitas")
     slug: str = Field(..., min_length=2, max_length=100, description="Slug fasilitas (lowercase, alphanumeric with hyphens)")
-    icon: Optional[str] = Field(None, max_length=255, description="Nama icon atau URL icon")
+    icon: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Icon dalam format Iconify (iconify:set:name) atau URL PNG dari storage"
+    )
     description: Optional[str] = Field(None, max_length=500, description="Deskripsi fasilitas")
 
     @field_validator('slug')
@@ -46,13 +129,22 @@ class FacilityBase(BaseModel):
             raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
         return v
 
+    @field_validator('icon')
+    @classmethod
+    def validate_icon(cls, v: Optional[str]) -> Optional[str]:
+        return validate_icon_format(v)
+
 class FacilityCreate(FacilityBase):
     pass
 
 class FacilityUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     slug: Optional[str] = Field(None, min_length=2, max_length=100)
-    icon: Optional[str] = Field(None, max_length=255)
+    icon: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Icon dalam format Iconify (iconify:set:name) atau URL PNG dari storage"
+    )
     description: Optional[str] = Field(None, max_length=500)
 
     @field_validator('slug')
@@ -60,6 +152,13 @@ class FacilityUpdate(BaseModel):
     def validate_slug(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not re.match(r'^[a-z0-9-]+$', v):
             raise ValueError('Slug must be lowercase alphanumeric with hyphens only')
+        return v
+
+    @field_validator('icon')
+    @classmethod
+    def validate_icon(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return validate_icon_format(v)
         return v
 
 class FacilityResponse(FacilityBase):

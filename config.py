@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # Example: "key1,key2,key3"
     GROQ_API_KEYS: Optional[str] = None
 
+    # Icon Upload Configuration
+    # Comma-separated list of allowed domains for icon URLs
+    ALLOWED_ICON_DOMAINS: str = "storage.googleapis.com,firebasestorage.googleapis.com"
+    MAX_ICON_FILE_SIZE: int = 100 * 1024  # 100KB
+
     class Config:
         env_file = ".env"
         extra = "ignore"

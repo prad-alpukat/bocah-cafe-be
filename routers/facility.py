@@ -1,13 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Optional
 from math import ceil
+from datetime import datetime
+import uuid
 from database import get_db
 from models import Facility, Admin
-from schemas import FacilityCreate, FacilityUpdate, FacilityResponse, PaginatedResponse, ApiResponse
+from schemas import FacilityCreate, FacilityUpdate, FacilityResponse, PaginatedResponse, ApiResponse, UploadResponse
 from auth_utils import get_current_admin
+from firebase_config import upload_file_from_memory, delete_file_from_storage
+from config import settings
 
 router = APIRouter()
+
+# Icon upload configuration
+ICON_UPLOAD_FOLDER = "facility-icons"
+ALLOWED_ICON_EXTENSIONS = {'image/png'}
+MAX_ICON_SIZE = settings.MAX_ICON_FILE_SIZE  # 100KB from config
 
 # Public endpoint - List all facilities
 @router.get("/", response_model=PaginatedResponse[FacilityResponse])
@@ -151,3 +160,122 @@ def delete_facility(
     db.delete(facility)
     db.commit()
     return None
+
+
+# Icon Upload Endpoint
+@router.post("/upload-icon", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_facility_icon(
+    file: UploadFile = File(..., description="PNG image file (max 100KB, recommended 128x128px)"),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Upload facility icon to Firebase Cloud Storage.
+    Admin only - requires authentication.
+
+    Args:
+        file: PNG image file (max 100KB)
+
+    Returns:
+        UploadResponse: Contains icon URL that can be used in facility.icon field
+
+    Notes:
+        - Only PNG format is allowed
+        - Maximum file size: 100KB
+        - Recommended dimensions: 128x128 pixels
+        - The returned URL can be used directly in the facility icon field
+    """
+    # Validate file type
+    if file.content_type not in ALLOWED_ICON_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PNG images are allowed for facility icons"
+        )
+
+    # Read file content
+    content = await file.read()
+
+    # Validate file size
+    if len(content) > MAX_ICON_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Icon file too large. Maximum size is {MAX_ICON_SIZE // 1024}KB"
+        )
+
+    # Validate PNG signature (first 8 bytes)
+    PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+    if not content.startswith(PNG_SIGNATURE):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid PNG file. File must be a valid PNG image"
+        )
+
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4()}.png"
+    destination_path = f"{ICON_UPLOAD_FOLDER}/{unique_filename}"
+
+    try:
+        icon_url = upload_file_from_memory(
+            file_content=content,
+            destination_blob_name=destination_path,
+            content_type="image/png"
+        )
+
+        return {
+            "message": "Facility icon uploaded successfully",
+            "data": {
+                "url": icon_url,
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "size": len(content),
+                "content_type": "image/png",
+                "uploaded_by": current_admin.username,
+                "uploaded_at": datetime.utcnow().isoformat()
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload icon: {str(e)}"
+        )
+
+
+@router.delete("/icon/{filename}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_facility_icon(
+    filename: str,
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Delete facility icon from Firebase Cloud Storage.
+    Admin only - requires authentication.
+
+    Args:
+        filename: The icon filename to delete (e.g., 'abc123.png')
+    """
+    # Security: Only allow deletion from the fixed icon folder
+    if not filename.endswith('.png'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename. Must be a PNG file"
+        )
+
+    blob_name = f"{ICON_UPLOAD_FOLDER}/{filename}"
+
+    try:
+        success = delete_file_from_storage(blob_name)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Icon not found or already deleted"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete icon: {str(e)}"
+        )
