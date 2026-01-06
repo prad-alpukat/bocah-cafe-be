@@ -137,7 +137,7 @@ def natural_language_search(
     elif not result["parsed_query"].get("is_relevant", True):
         return {
             "query": body.query,
-            "message": "Apasih anjing gaje 😂 Ke gw bahas cafe aja ya!",
+            "message": "Apasih gaje 😂 Ke gw bahas cafe aja ya!",
             "type": "irrelevant"
         }
 
