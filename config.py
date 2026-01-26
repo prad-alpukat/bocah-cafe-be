@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # Database Configuration
     DATABASE_URL: str = "sqlite:///./bocah_cafe.db"
+    TURSO_AUTH_TOKEN: Optional[str] = None  # Required for Turso/libsql database
 
     # Firebase Configuration
     FIREBASE_STORAGE_BUCKET: str = "your-project-id.appspot.com"

@@ -11,6 +11,19 @@ if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL, connect_args={"check_same_thread": False}
     )
+elif DATABASE_URL.startswith("libsql"):
+    # Turso database connection using sqlalchemy-libsql driver
+    # URL format: libsql://your-db.turso.io?authToken=xxx
+    TURSO_AUTH_TOKEN = settings.TURSO_AUTH_TOKEN
+
+    # Append auth token to URL for sqlalchemy-libsql driver
+    db_url = f"{DATABASE_URL}?authToken={TURSO_AUTH_TOKEN}&secure=true"
+
+    engine = create_engine(
+        db_url,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True
+    )
 else:
     # Configure SSL for Azure MySQL
     ssl_context = ssl.create_default_context()
